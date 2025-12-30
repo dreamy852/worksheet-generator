@@ -22,8 +22,6 @@ document.addEventListener("DOMContentLoaded", function () {
   var generateBtn = document.getElementById("generateBtn");
   var downloadWorksheetPdfBtn = document.getElementById("downloadWorksheetPdfBtn");
   var downloadSolutionPdfBtn = document.getElementById("downloadSolutionPdfBtn");
-  var downloadWorksheetTexBtn = document.getElementById("downloadWorksheetTexBtn");
-  var downloadSolutionTexBtn = document.getElementById("downloadSolutionTexBtn");
 
   function updateYear() {
     if (yearEl) yearEl.textContent = String(new Date().getFullYear());
@@ -123,10 +121,6 @@ document.addEventListener("DOMContentLoaded", function () {
     if (dlWPdf) dlWPdf.textContent = zh ? '下載 PDF (工作紙)' : 'Download PDF (Worksheet)';
     var dlSPdf = document.getElementById('downloadSolutionPdfBtn');
     if (dlSPdf) dlSPdf.textContent = zh ? '下載 PDF (解答)' : 'Download PDF (Solution)';
-    var dlWTex = document.getElementById('downloadWorksheetTexBtn');
-    if (dlWTex) dlWTex.textContent = zh ? '下載 .tex (工作紙)' : 'Download .tex (Worksheet)';
-    var dlSTex = document.getElementById('downloadSolutionTexBtn');
-    if (dlSTex) dlSTex.textContent = zh ? '下載 .tex (解答)' : 'Download .tex (Solution)';
     var previewTitle = document.getElementById('previewTitle');
     if (previewTitle) previewTitle.textContent = zh ? '預覽' : 'Preview';
   }
@@ -449,6 +443,73 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   // 生成 PDF
+  // 生成单个section的HTML（用于PDF，每个section单独一页）
+  function generateSectionHTML(level, questions, meta, isSolution, sectionLabels, showHeader) {
+    var html = [];
+    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 0; width: 800px; font-size: 14px; line-height: 1.6; box-sizing: border-box; background: #ffffff;">');
+    html.push('<div style="padding: 2cm;">'); // Inner div for content padding
+    
+    // 标题（包含logo）- 只在第一页显示
+    if (showHeader) {
+      html.push('<div style="text-align: center; margin-bottom: 30px;">');
+      if (meta.logoDataUrl) {
+        html.push('<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">');
+        html.push('<img src="' + escapeHtml(meta.logoDataUrl) + '" style="height: 48px; width: auto; max-width: 120px; object-fit: contain;" alt="Logo">');
+        html.push('</div>');
+      }
+      html.push('<h1 style="font-size: 24px; font-weight: bold; margin: 0;">' + escapeHtml(meta.topic || (isSolution ? "Solution" : "Worksheet")) + (isSolution ? ' - 解答' : '') + '</h1>');
+      html.push('<p style="margin: 10px 0 0 0; color: #666;">' + escapeHtml(meta.centre || "Tutorial Centre") + '</p>');
+      html.push('</div>');
+    }
+    
+    // Section标题和内容
+    html.push('<h2 style="font-size: 18px; font-weight: bold; background: #1e40af; color: white; padding: 10px; margin: 0 0 15px 0;">' + 
+              (sectionLabels[level] || level) + (isSolution ? ' 解答' : '') + '</h2>');
+    html.push('<ol style="margin: 0; padding-left: 25px;">');
+    
+    questions.forEach(function(q, idx) {
+      html.push('<li style="margin-bottom: ' + (isSolution ? '25px' : '20px') + ';">');
+      html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
+      
+      if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
+        html.push('<ul style="list-style-type: none; padding-left: 20px; margin: 10px 0;">');
+        q.options.forEach(function(opt) {
+          html.push('<li style="margin: 5px 0;">' + textToHtml(opt) + '</li>');
+        });
+        html.push('</ul>');
+      }
+      
+      if (isSolution) {
+        // 答案和解答
+        html.push('<div style="margin-top: 15px; padding: 10px; background: #f0f9ff; border-left: 4px solid #1e40af;">');
+        if (q.type === "MC") {
+          html.push('<p style="margin: 5px 0;"><strong>答案：</strong>' + escapeHtml(q.answer || "N/A") + '</p>');
+        }
+        if (q.solution) {
+          html.push('<p style="margin: 5px 0;"><strong>解答：</strong>' + textToHtml(q.solution) + '</p>');
+        }
+        if (q.marks != null) {
+          html.push('<p style="margin: 5px 0;"><strong>分數：</strong>' + escapeHtml(String(q.marks)) + '</p>');
+        }
+        html.push('</div>');
+      } else {
+        // 答题空间
+        if (q.type === "Long") {
+          html.push('<div style="margin-top: 15px; min-height: 150px; border-top: 1px solid #ddd; padding-top: 10px;"></div>');
+        } else {
+          html.push('<div style="margin-top: 10px; min-height: 40px; border-top: 1px solid #ddd; padding-top: 5px;"></div>');
+        }
+      }
+      
+      html.push('</li>');
+    });
+    
+    html.push('</ol>');
+    html.push('</div>'); // Close inner padding div
+    html.push('</div>'); // Close outer container
+    return html.join("");
+  }
+
   async function generatePDF(questions, meta, isSolution) {
     if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
       alert("PDF library not loaded. Please refresh the page.");
@@ -462,38 +523,6 @@ document.addEventListener("DOMContentLoaded", function () {
     showStatus(isSolution ? "Generating solution PDF..." : "Generating worksheet PDF...");
     
     try {
-      // 创建临时容器
-      var container = document.createElement("div");
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
-      container.style.width = "800px";
-      container.style.backgroundColor = "#ffffff";
-      var htmlContent = isSolution ? generateSolutionHTML(questions, meta) : generateWorksheetHTML(questions, meta);
-      container.innerHTML = htmlContent;
-      document.body.appendChild(container);
-
-      // 配置 MathJax 以自动渲染
-      if (hasMathJax() && MathJax.typesetPromise) {
-        try {
-          await MathJax.typesetPromise([container]);
-        } catch (e) {
-          console.warn("MathJax rendering error:", e);
-        }
-      }
-      
-      // 额外等待确保渲染完成
-      await new Promise(function(resolve) { setTimeout(resolve, 500); });
-
-      // 使用 html2canvas 转换为 canvas
-      var canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: 800,
-        windowWidth: 800
-      });
-
-      // 创建 PDF
       var jsPDF = window.jspdf.jsPDF;
       var pdf = new jsPDF({
         orientation: "portrait",
@@ -501,28 +530,99 @@ document.addEventListener("DOMContentLoaded", function () {
         format: "a4"
       });
 
-      var imgData = canvas.toDataURL("image/png");
       var pageWidth = 210; // A4 width in mm
       var pageHeight = 297; // A4 height in mm
-      var imgWidth = pageWidth; // Fill full page width (margin is already in HTML padding)
-      var imgHeight = (canvas.height * imgWidth) / canvas.width; // Maintain aspect ratio
-      var heightLeft = imgHeight;
-      var position = 0;
-
-      // 添加第一页（边距已在HTML模板的padding中）
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // 如果需要多页
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      var margin = 20; // 2cm = 20mm margin
+      var contentWidth = pageWidth - (margin * 2); // 170mm content width
+      var contentHeight = pageHeight - (margin * 2); // 257mm content height per page
+      
+      var groups = groupByDifficulty(questions);
+      var sectionLabels = { "Basic": "基礎", "Intermediate": "中級", "Advanced": "高級" };
+      var levels = ["Basic", "Intermediate", "Advanced"];
+      
+      // 为每个section生成单独的页面（顺序执行，每个section新页开始）
+      for (var i = 0; i < levels.length; i++) {
+        var level = levels[i];
+        var list = groups[level] || [];
+        if (!list.length) continue;
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        // 创建临时容器用于这个section
+        var container = document.createElement("div");
+        container.style.position = "absolute";
+        container.style.left = "-9999px";
+        container.style.width = "800px";
+        container.style.backgroundColor = "#ffffff";
+        container.style.padding = "0";
+        container.style.margin = "0";
+        
+        var sectionHTML = generateSectionHTML(level, list, meta, isSolution, sectionLabels, i === 0);
+        container.innerHTML = sectionHTML;
+        document.body.appendChild(container);
+        
+        // 等待MathJax渲染
+        if (hasMathJax() && MathJax.typesetPromise) {
+          try {
+            await MathJax.typesetPromise([container]);
+          } catch (e) {
+            console.warn("MathJax rendering error:", e);
+          }
+        }
+        await new Promise(function(r) { setTimeout(r, 300); });
+        
+        // 转换为canvas
+        var canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          width: 800,
+          windowWidth: 800,
+          backgroundColor: "#ffffff"
+        });
+        
+        // 计算图片尺寸（HTML中已包含2cm padding，所以图片填充整个页面）
+        var imgWidth = pageWidth; // 210mm - fill full page width
+        var imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        // 如果内容超过一页，需要分页
+        if (imgHeight <= pageHeight) {
+          // 单页足够，直接添加（填充整个页面，边距已在HTML中）
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, imgWidth, imgHeight);
+        } else {
+          // 需要多页，分割canvas
+          var sourceY = 0;
+          var remainingHeight = imgHeight;
+          var pageCount = 0;
+          
+          while (remainingHeight > 0) {
+            if (pageCount > 0) {
+              pdf.addPage();
+            }
+            pageCount++;
+            
+            var pageImgHeight = Math.min(remainingHeight, pageHeight);
+            var sourceCanvasHeight = (pageImgHeight / imgHeight) * canvas.height;
+            
+            // 创建临时canvas用于当前页面
+            var pageCanvas = document.createElement("canvas");
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sourceCanvasHeight;
+            var pageCtx = pageCanvas.getContext("2d");
+            pageCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceCanvasHeight, 0, 0, canvas.width, sourceCanvasHeight);
+            
+            pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, imgWidth, pageImgHeight);
+            
+            sourceY += sourceCanvasHeight;
+            remainingHeight -= pageImgHeight;
+          }
+        }
+        
+        // 清理
+        document.body.removeChild(container);
       }
-
-      // 清理
-      document.body.removeChild(container);
 
       // 保存
       var filename = isSolution ? "Solution.pdf" : "Worksheet.pdf";
@@ -927,8 +1027,6 @@ document.addEventListener("DOMContentLoaded", function () {
     generateBtn.disabled = true;
     downloadWorksheetPdfBtn.disabled = true;
     downloadSolutionPdfBtn.disabled = true;
-    downloadWorksheetTexBtn.disabled = true;
-    downloadSolutionTexBtn.disabled = true;
     if (!apiKey) {
       var formDataNoKey = collectForm();
       var langNoKey = detectLanguage(formDataNoKey.subject + " " + formDataNoKey.notes);
@@ -940,11 +1038,9 @@ document.addEventListener("DOMContentLoaded", function () {
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetPdfBtn.disabled = false;
-        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionPdfBtn.disabled = false;
-          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -984,11 +1080,9 @@ document.addEventListener("DOMContentLoaded", function () {
           updatePreview(); // Update preview after questions are generated
           statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
           downloadWorksheetPdfBtn.disabled = false;
-          downloadWorksheetTexBtn.disabled = false;
           setTimeout(function () {
             statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
             downloadSolutionPdfBtn.disabled = false;
-            downloadSolutionTexBtn.disabled = false;
           }, 400);
         }).finally(function () {
           generateBtn.disabled = false;
@@ -1013,11 +1107,9 @@ document.addEventListener("DOMContentLoaded", function () {
         updatePreview(); // Update preview after questions are generated
         statusTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetPdfBtn.disabled = false;
-        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionPdfBtn.disabled = false;
-          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -1036,11 +1128,9 @@ document.addEventListener("DOMContentLoaded", function () {
         updatePreview(); // Update preview after questions are generated
         statusTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetPdfBtn.disabled = false;
-        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui3 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionPdfBtn.disabled = false;
-          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -1070,8 +1160,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // Disable downloads immediately
     downloadWorksheetPdfBtn.disabled = true;
     downloadSolutionPdfBtn.disabled = true;
-    downloadWorksheetTexBtn.disabled = true;
-    downloadSolutionTexBtn.disabled = true;
     generateWithDeepSeek();
   });
 
@@ -1101,32 +1189,6 @@ document.addEventListener("DOMContentLoaded", function () {
       topic: formData.subject,
       logoDataUrl: logoDataUrl
     }, true);
-  });
-
-  downloadWorksheetTexBtn.addEventListener("click", function () {
-    var formData = collectForm();
-    var lang = detectLanguage(formData.subject + " " + formData.notes);
-    var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
-      ? window.GeneratedQuestions
-      : localGenerateQuestions(formData, lang);
-    var tex = generateTeX(questions, {
-      centre: formData.centre,
-      topic: formData.subject
-    }, false);
-    downloadStringAsFile(tex, "Worksheet.tex");
-  });
-
-  downloadSolutionTexBtn.addEventListener("click", function () {
-    var formData = collectForm();
-    var lang = detectLanguage(formData.subject + " " + formData.notes);
-    var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
-      ? window.GeneratedQuestions
-      : localGenerateQuestions(formData, lang);
-    var tex = generateTeX(questions, {
-      centre: formData.centre,
-      topic: formData.subject
-    }, true);
-    downloadStringAsFile(tex, "Solution.tex");
   });
 
   updateYear();
