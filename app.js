@@ -35,9 +35,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // 如果有生成的问题，显示预览
     if (window.GeneratedQuestions && Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length > 0) {
       var formData = collectForm();
+      var logoDataUrl = logoPreviewEl && logoPreviewEl.src && logoPreviewEl.src !== window.location.href ? logoPreviewEl.src : null;
       var htmlContent = generateWorksheetHTML(window.GeneratedQuestions, {
         centre: formData.centre,
-        topic: formData.subject
+        topic: formData.subject,
+        logoDataUrl: logoDataUrl
       });
       paperPreviewEl.innerHTML = htmlContent;
       
@@ -319,10 +321,15 @@ document.addEventListener("DOMContentLoaded", function () {
   // 生成工作表的 HTML 内容
   function generateWorksheetHTML(questions, meta) {
     var html = [];
-    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; font-size: 14px; line-height: 1.6;" class="worksheet-content">');
+    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 2cm; max-width: 800px; margin: 0; font-size: 14px; line-height: 1.6; box-sizing: border-box; background: #ffffff;" class="worksheet-content">');
     
-    // 标题
+    // 标题（包含logo）
     html.push('<div style="text-align: center; margin-bottom: 30px;">');
+    if (meta.logoDataUrl) {
+      html.push('<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">');
+      html.push('<img src="' + escapeHtml(meta.logoDataUrl) + '" style="height: 48px; width: auto; max-width: 120px; object-fit: contain;" alt="Logo">');
+      html.push('</div>');
+    }
     html.push('<h1 style="font-size: 24px; font-weight: bold; margin: 0;">' + escapeHtml(meta.topic || "Worksheet") + '</h1>');
     html.push('<p style="margin: 10px 0 0 0; color: #666;">' + escapeHtml(meta.centre || "Tutorial Centre") + '</p>');
     html.push('</div>');
@@ -372,10 +379,15 @@ document.addEventListener("DOMContentLoaded", function () {
   // 生成解答的 HTML 内容
   function generateSolutionHTML(questions, meta) {
     var html = [];
-    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; font-size: 14px; line-height: 1.6;" class="solution-content">');
+    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 2cm; max-width: 800px; margin: 0; font-size: 14px; line-height: 1.6; box-sizing: border-box; background: #ffffff;" class="solution-content">');
     
-    // 标题
+    // 标题（包含logo）
     html.push('<div style="text-align: center; margin-bottom: 30px;">');
+    if (meta.logoDataUrl) {
+      html.push('<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">');
+      html.push('<img src="' + escapeHtml(meta.logoDataUrl) + '" style="height: 48px; width: auto; max-width: 120px; object-fit: contain;" alt="Logo">');
+      html.push('</div>');
+    }
     html.push('<h1 style="font-size: 24px; font-weight: bold; margin: 0;">' + escapeHtml(meta.topic || "Solution") + ' - 解答</h1>');
     html.push('<p style="margin: 10px 0 0 0; color: #666;">' + escapeHtml(meta.centre || "Tutorial Centre") + '</p>');
     html.push('</div>');
@@ -490,13 +502,14 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       var imgData = canvas.toDataURL("image/png");
-      var imgWidth = 210; // A4 width in mm
+      var pageWidth = 210; // A4 width in mm
       var pageHeight = 297; // A4 height in mm
-      var imgHeight = (canvas.height * imgWidth) / canvas.width;
+      var imgWidth = pageWidth; // Fill full page width (margin is already in HTML padding)
+      var imgHeight = (canvas.height * imgWidth) / canvas.width; // Maintain aspect ratio
       var heightLeft = imgHeight;
       var position = 0;
 
-      // 添加第一页
+      // 添加第一页（边距已在HTML模板的padding中）
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
@@ -526,34 +539,214 @@ document.addEventListener("DOMContentLoaded", function () {
   function localGenerateQuestions(formData, lang) {
     var out = [];
     var idx = 1;
-    function add(count, difficulty, type) {
-      for (var i = 0; i < count; i++) {
-        var baseText = lang === "zh" ? "求解方程" : "Solve the equation";
-        var tex = i % 2 === 0 ? "x^2+5x+6=0" : "\\int_0^1 x^2\\,dx";
-        var solTex = i % 2 === 0 ? "x=-2,\\;x=-3" : "\\frac{1}{3}";
-        var mcOpts = ["A) $1$", "B) $2$", "C) $3$", "D) $4$"];
-        var ans = "A";
-        var text = baseText + ": $" + tex + "$";
-        var solution = i % 2 === 0 ? "Factor to $(x+2)(x+3)=0$; roots $-2$ and $-3$." : "Integrate $x^2$ to $x^3/3$; evaluate at $1$ to get $1/3$.";
-        out.push({
-          id: String(idx++),
-          difficulty: difficulty,
-          type: type,
-          language: lang,
-          text: text,
-          textTeX: tex,
-          options: type === "MC" ? mcOpts : [],
-          answer: type === "MC" ? ans : "",
-          solution: solution,
-          solutionTeX: type === "Long" ? solTex : "",
-          marks: type === "Long" ? 6 : 2,
-          teacher_notes: lang === "zh" ? "提示：注意基礎因式分解與定積分基礎。" : "Tip: Emphasize factoring basics and definite integral evaluation."
-        });
+    var questionCounter = 0; // Global counter to ensure uniqueness
+    
+    // Generate diverse questions based on topic and difficulty
+    function generateQuestion(difficulty, type, topic) {
+      questionCounter++;
+      var qNum = questionCounter;
+      
+      // Topic detection
+      var topicLower = (topic || "").toLowerCase();
+      var notesLower = (formData.notes || "").toLowerCase();
+      var isIndices = /indices?|指數|指數律/.test(topicLower + notesLower);
+      var isAlgebra = /algebra|代數|equation|方程/.test(topicLower + notesLower);
+      var isCalculus = /calculus|微積分|integral|積分|derivative|導數/.test(topicLower + notesLower);
+      var isGeometry = /geometry|幾何|triangle|三角形/.test(topicLower + notesLower);
+      
+      var text, solution, mcOpts, answer, marks, teacherNotes;
+      
+      // Generate based on difficulty and topic
+      if (isIndices) {
+        // Law of indices questions
+        if (difficulty === "Basic") {
+          if (type === "MC") {
+            var base1 = 2 + (qNum % 3);
+            var exp1 = 3 + (qNum % 2);
+            var exp2 = 2 + (qNum % 2);
+            text = lang === "zh" ? "計算 $"+base1+"^{"+exp1+"} \\times "+base1+"^{"+exp2+"}$" : "Calculate $"+base1+"^{"+exp1+"} \\times "+base1+"^{"+exp2+"}$";
+            var correct = Math.pow(base1, exp1 + exp2);
+            var opt1 = correct;
+            var opt2 = Math.pow(base1, exp1) + Math.pow(base1, exp2);
+            var opt3 = Math.pow(base1, exp1 * exp2);
+            var opt4 = correct + 1;
+            mcOpts = ["A) $" + opt1 + "$", "B) $" + opt2 + "$", "C) $" + opt3 + "$", "D) $" + opt4 + "$"];
+            answer = "A";
+            solution = lang === "zh" ? "使用指數律：$"+base1+"^{"+exp1+"} \\times "+base1+"^{"+exp2+"} = "+base1+"^{"+exp1+"+"+exp2+"} = "+base1+"^{"+(exp1+exp2)+"} = "+correct+"$" 
+                      : "Using law of indices: $"+base1+"^{"+exp1+"} \\times "+base1+"^{"+exp2+"} = "+base1+"^{"+exp1+"+"+exp2+"} = "+correct+"$";
+          } else {
+            var base2 = 3 + (qNum % 3);
+            var exp3 = 4 + (qNum % 2);
+            text = lang === "zh" ? "簡化 $( "+base2+"^{"+exp3+"} )^2$" : "Simplify $( "+base2+"^{"+exp3+"} )^2$";
+            var result = Math.pow(base2, exp3 * 2);
+            solution = lang === "zh" ? "使用指數律：$( "+base2+"^{"+exp3+"} )^2 = "+base2+"^{"+exp3+" \\times 2} = "+base2+"^{"+(exp3*2)+"} = "+result+"$"
+                      : "Using law of indices: $( "+base2+"^{"+exp3+"} )^2 = "+base2+"^{"+exp3+" \\times 2} = "+result+"$";
+            marks = 4;
+          }
+        } else if (difficulty === "Intermediate") {
+          if (type === "MC") {
+            var base3 = 2 + (qNum % 2);
+            var exp4 = 5 + (qNum % 3);
+            var exp5 = 2 + (qNum % 2);
+            text = lang === "zh" ? "計算 $\\frac{"+base3+"^{"+exp4+"}}{"+base3+"^{"+exp5+"}}$" : "Calculate $\\frac{"+base3+"^{"+exp4+"}}{"+base3+"^{"+exp5+"}}$";
+            var correct2 = Math.pow(base3, exp4 - exp5);
+            mcOpts = ["A) $" + correct2 + "$", "B) $" + (correct2 - 1) + "$", "C) $" + (correct2 + 1) + "$", "D) $" + Math.pow(base3, exp4 + exp5) + "$"];
+            answer = "A";
+            solution = lang === "zh" ? "$\\frac{"+base3+"^{"+exp4+"}}{"+base3+"^{"+exp5+"}} = "+base3+"^{"+exp4+"-"+exp5+"} = "+base3+"^{"+(exp4-exp5)+"} = "+correct2+"$"
+                      : "$\\frac{"+base3+"^{"+exp4+"}}{"+base3+"^{"+exp5+"}} = "+base3+"^{"+exp4+"-"+exp5+"} = "+correct2+"$";
+          } else {
+            var base4 = 2 + (qNum % 3);
+            var exp6 = 3 + (qNum % 2);
+            text = lang === "zh" ? "化簡 $\\sqrt{"+base4+"^{"+exp6+"}}$" : "Simplify $\\sqrt{"+base4+"^{"+exp6+"}}$";
+            var result2 = Math.pow(base4, exp6 / 2);
+            solution = lang === "zh" ? "$\\sqrt{"+base4+"^{"+exp6+"}} = "+base4+"^{\\frac{"+exp6+"}{2}} = "+base4+"^{"+(exp6/2)+"} = "+result2+"$"
+                      : "$\\sqrt{"+base4+"^{"+exp6+"}} = "+base4+"^{\\frac{"+exp6+"}{2}} = "+result2+"$";
+            marks = 5;
+          }
+        } else { // Advanced
+          if (type === "MC") {
+            var base5 = 2 + (qNum % 2);
+            var base6 = 3 + (qNum % 2);
+            var exp7 = 2 + (qNum % 2);
+            text = lang === "zh" ? "計算 $("+base5+" \\times "+base6+")^{"+exp7+"}$" : "Calculate $("+base5+" \\times "+base6+")^{"+exp7+"}$";
+            var correct3 = Math.pow(base5 * base6, exp7);
+            mcOpts = ["A) $" + correct3 + "$", "B) $" + (correct3 - base5) + "$", "C) $" + (Math.pow(base5, exp7) * Math.pow(base6, exp7)) + "$", "D) $" + (correct3 + 10) + "$"];
+            answer = "C";
+            solution = lang === "zh" ? "$("+base5+" \\times "+base6+")^{"+exp7+"} = "+base5+"^{"+exp7+"} \\times "+base6+"^{"+exp7+"} = "+correct3+"$"
+                      : "$("+base5+" \\times "+base6+")^{"+exp7+"} = "+base5+"^{"+exp7+"} \\times "+base6+"^{"+exp7+"} = "+correct3+"$";
+          } else {
+            var base7 = 2 + (qNum % 2);
+            var exp8 = 6 + (qNum % 3);
+            var exp9 = 3 + (qNum % 2);
+            text = lang === "zh" ? "簡化 $\\frac{("+base7+"^{"+exp8+"})^2}{"+base7+"^{"+exp9+"}}$" : "Simplify $\\frac{("+base7+"^{"+exp8+"})^2}{"+base7+"^{"+exp9+"}}$";
+            var result3 = Math.pow(base7, exp8 * 2 - exp9);
+            solution = lang === "zh" ? "$\\frac{("+base7+"^{"+exp8+"})^2}{"+base7+"^{"+exp9+"}} = \\frac{"+base7+"^{"+(exp8*2)+"}}{"+base7+"^{"+exp9+"}} = "+base7+"^{"+(exp8*2)+"-"+exp9+"} = "+result3+"$"
+                      : "$\\frac{("+base7+"^{"+exp8+"})^2}{"+base7+"^{"+exp9+"}} = "+base7+"^{"+(exp8*2)+"-"+exp9+"} = "+result3+"$";
+            marks = 6;
+          }
+        }
+        teacherNotes = lang === "zh" ? "提示：應用指數律的相關規則。" : "Tip: Apply the relevant laws of indices.";
+      } else if (isAlgebra) {
+        // Algebra questions
+        if (difficulty === "Basic") {
+          if (type === "MC") {
+            var a1 = 2 + (qNum % 3);
+            var b1 = 3 + (qNum % 4);
+            text = lang === "zh" ? "求解 $x + " + a1 + " = " + (a1 + b1) + "$" : "Solve $x + " + a1 + " = " + (a1 + b1) + "$";
+            var ans1 = b1;
+            mcOpts = ["A) $" + ans1 + "$", "B) $" + (ans1 + 1) + "$", "C) $" + (ans1 - 1) + "$", "D) $" + (ans1 + 2) + "$"];
+            answer = "A";
+            solution = lang === "zh" ? "$x = " + (a1 + b1) + " - " + a1 + " = " + ans1 + "$" : "$x = " + (a1 + b1) + " - " + a1 + " = " + ans1 + "$";
+          } else {
+            var a2 = 3 + (qNum % 2);
+            var b2 = 5 + (qNum % 3);
+            text = lang === "zh" ? "求解 $2x - " + a2 + " = " + b2 + "$" : "Solve $2x - " + a2 + " = " + b2 + "$";
+            var ans2 = (b2 + a2) / 2;
+            solution = lang === "zh" ? "$2x = " + b2 + " + " + a2 + " = " + (b2 + a2) + "$, 所以 $x = " + ans2 + "$" : "$2x = " + (b2 + a2) + "$, so $x = " + ans2 + "$";
+            marks = 4;
+          }
+        } else if (difficulty === "Intermediate") {
+          if (type === "MC") {
+            var a3 = 2 + (qNum % 2);
+            var b3 = 1 + (qNum % 2);
+            var c3 = 6 + (qNum % 4);
+            text = lang === "zh" ? "求解 $" + a3 + "x + " + b3 + " = " + c3 + "$" : "Solve $" + a3 + "x + " + b3 + " = " + c3 + "$";
+            var ans3 = (c3 - b3) / a3;
+            mcOpts = ["A) $" + ans3 + "$", "B) $" + (ans3 + 1) + "$", "C) $" + (ans3 - 1) + "$", "D) $" + (ans3 * 2) + "$"];
+            answer = "A";
+            solution = lang === "zh" ? "$" + a3 + "x = " + c3 + " - " + b3 + " = " + (c3 - b3) + "$, 所以 $x = " + ans3 + "$" : "$" + a3 + "x = " + (c3 - b3) + "$, so $x = " + ans3 + "$";
+          } else {
+            var a4 = 1 + (qNum % 2);
+            var b4 = 5 + (qNum % 3);
+            var c4 = 6 + (qNum % 4);
+            text = lang === "zh" ? "因式分解 $x^2 + " + b4 + "x + " + c4 + "$" : "Factorize $x^2 + " + b4 + "x + " + c4 + "$";
+            // Find factors
+            var factor1 = 2 + (qNum % 2);
+            var factor2 = c4 / factor1;
+            solution = lang === "zh" ? "$x^2 + " + b4 + "x + " + c4 + " = (x + " + factor1 + ")(x + " + factor2 + ")$" : "$x^2 + " + b4 + "x + " + c4 + " = (x + " + factor1 + ")(x + " + factor2 + ")$";
+            marks = 5;
+          }
+        } else { // Advanced
+          if (type === "MC") {
+            var a5 = 2 + (qNum % 2);
+            var b5 = 3 + (qNum % 2);
+            var c5 = 1 + (qNum % 2);
+            text = lang === "zh" ? "求解 $" + a5 + "x^2 + " + b5 + "x + " + c5 + " = 0$" : "Solve $" + a5 + "x^2 + " + b5 + "x + " + c5 + " = 0$";
+            var disc = b5 * b5 - 4 * a5 * c5;
+            var ans4 = disc >= 0 ? ((-b5 + Math.sqrt(disc)) / (2 * a5)).toFixed(2) : "無實數解";
+            mcOpts = ["A) $" + ans4 + "$", "B) $2$", "C) $3$", "D) $4$"];
+            answer = "A";
+            solution = lang === "zh" ? "使用二次公式：$x = \\frac{-" + b5 + " \\pm \\sqrt{" + disc + "}}{" + (2 * a5) + "}$" : "Using quadratic formula: $x = \\frac{-" + b5 + " \\pm \\sqrt{" + disc + "}}{" + (2 * a5) + "}$";
+          } else {
+            var a6 = 1 + (qNum % 2);
+            var b6 = 6 + (qNum % 3);
+            var c6 = 8 + (qNum % 4);
+            text = lang === "zh" ? "解方程組：$\\begin{cases} x + y = " + b6 + " \\\\ x - y = " + (b6 - 4) + " \\end{cases}$" : "Solve the system: $\\begin{cases} x + y = " + b6 + " \\\\ x - y = " + (b6 - 4) + " \\end{cases}$";
+            var xVal = (b6 + (b6 - 4)) / 2;
+            var yVal = b6 - xVal;
+            solution = lang === "zh" ? "相加：$2x = " + (2 * xVal) + "$，所以 $x = " + xVal + "$，$y = " + yVal + "$" : "$x = " + xVal + "$, $y = " + yVal + "$";
+            marks = 6;
+          }
+        }
+        teacherNotes = lang === "zh" ? "提示：注意解方程的步驟和方法。" : "Tip: Pay attention to the steps and methods for solving equations.";
+      } else {
+        // Default: Mixed topics
+        var topics = [
+          {text: lang === "zh" ? "計算 $2^{" + (3 + qNum % 3) + "} \\times 2^{" + (2 + qNum % 2) + "}$" : "Calculate $2^{" + (3 + qNum % 3) + "} \\times 2^{" + (2 + qNum % 2) + "}$", 
+           sol: lang === "zh" ? "$2^{" + (5 + qNum % 5) + "} = " + Math.pow(2, 5 + qNum % 5) + "$" : "$2^{" + (5 + qNum % 5) + "} = " + Math.pow(2, 5 + qNum % 5) + "$"},
+          {text: lang === "zh" ? "求解 $x + " + (2 + qNum % 5) + " = " + (7 + qNum % 5) + "$" : "Solve $x + " + (2 + qNum % 5) + " = " + (7 + qNum % 5) + "$",
+           sol: lang === "zh" ? "$x = " + (5 + qNum % 5) + "$" : "$x = " + (5 + qNum % 5) + "$"},
+          {text: lang === "zh" ? "計算 $\\sqrt{" + ((4 + qNum % 10) * (4 + qNum % 10)) + "}$" : "Calculate $\\sqrt{" + ((4 + qNum % 10) * (4 + qNum % 10)) + "}$",
+           sol: lang === "zh" ? "$\\sqrt{" + ((4 + qNum % 10) * (4 + qNum % 10)) + "} = " + (4 + qNum % 10) + "$" : "$\\sqrt{" + ((4 + qNum % 10) * (4 + qNum % 10)) + "} = " + (4 + qNum % 10) + "$"}
+        ];
+        var topicIdx = qNum % topics.length;
+        text = topics[topicIdx].text;
+        solution = topics[topicIdx].sol;
+        if (type === "MC") {
+          var ansVal = 5 + qNum % 10;
+          mcOpts = ["A) $" + ansVal + "$", "B) $" + (ansVal + 1) + "$", "C) $" + (ansVal - 1) + "$", "D) $" + (ansVal + 2) + "$"];
+          answer = "A";
+        } else {
+          marks = difficulty === "Basic" ? 4 : (difficulty === "Intermediate" ? 5 : 6);
+        }
+        teacherNotes = lang === "zh" ? "提示：仔細思考問題的解決方法。" : "Tip: Think carefully about the solution method.";
       }
+      
+      return {
+        id: String(idx++),
+        difficulty: difficulty,
+        type: type,
+        language: lang,
+        text: text,
+        textTeX: "",
+        options: type === "MC" ? (mcOpts || []) : [],
+        answer: type === "MC" ? (answer || "A") : "",
+        solution: solution || "",
+        solutionTeX: type === "Long" ? "" : "",
+        marks: marks || (type === "MC" ? 2 : (difficulty === "Basic" ? 4 : (difficulty === "Intermediate" ? 5 : 6))),
+        teacher_notes: teacherNotes || (lang === "zh" ? "提示：仔細思考。" : "Tip: Think carefully.")
+      };
     }
+    
     var counts = formData.counts;
-    [["Basic", counts.mcBasic], ["Intermediate", counts.mcIntermediate], ["Advanced", counts.mcAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "MC"); });
-    [["Basic", counts.longBasic], ["Intermediate", counts.longIntermediate], ["Advanced", counts.longAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "Long"); });
+    var topic = formData.subject || "";
+    
+    [["Basic", counts.mcBasic], ["Intermediate", counts.mcIntermediate], ["Advanced", counts.mcAdvanced]].forEach(function (pair) {
+      var level = pair[0];
+      var count = pair[1];
+      for (var i = 0; i < count; i++) {
+        out.push(generateQuestion(level, "MC", topic));
+      }
+    });
+    
+    [["Basic", counts.longBasic], ["Intermediate", counts.longIntermediate], ["Advanced", counts.longAdvanced]].forEach(function (pair) {
+      var level = pair[0];
+      var count = pair[1];
+      for (var i = 0; i < count; i++) {
+        out.push(generateQuestion(level, "Long", topic));
+      }
+    });
+    
     return out;
   }
 
@@ -888,9 +1081,11 @@ document.addEventListener("DOMContentLoaded", function () {
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
       : localGenerateQuestions(formData, lang);
+    var logoDataUrl = logoPreviewEl && logoPreviewEl.src && logoPreviewEl.src !== window.location.href ? logoPreviewEl.src : null;
     await generatePDF(questions, {
       centre: formData.centre,
-      topic: formData.subject
+      topic: formData.subject,
+      logoDataUrl: logoDataUrl
     }, false);
   });
 
@@ -900,9 +1095,11 @@ document.addEventListener("DOMContentLoaded", function () {
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
       : localGenerateQuestions(formData, lang);
+    var logoDataUrl = logoPreviewEl && logoPreviewEl.src && logoPreviewEl.src !== window.location.href ? logoPreviewEl.src : null;
     await generatePDF(questions, {
       centre: formData.centre,
-      topic: formData.subject
+      topic: formData.subject,
+      logoDataUrl: logoDataUrl
     }, true);
   });
 
