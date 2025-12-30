@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worksheet Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-mark">WG</span>
+        <span class="brand-text">Worksheet Generator</span>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button id="generateBtn" class="btn btn-primary" type="button">Generate Worksheet</button>
+        <button id="downloadWorksheetBtn" class="btn" type="button">Download Worksheet PDF</button>
+        <button id="downloadSolutionBtn" class="btn" type="button">Download Solution PDF</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-grid">
+    <section class="card form-card">
+      <h2 class="section-title">Worksheet Setup</h2>
+      <form id="worksheetForm" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="subject">Topic/Subject</label>
+            <input id="subject" name="subject" type="text" list="subjects" placeholder="e.g., Mathematics" required>
+            <datalist id="subjects">
+              <option value="Mathematics"></option>
+              <option value="English"></option>
+              <option value="Science"></option>
+              <option value="Chinese"></option>
+            </datalist>
+          </div>
+
+          <div class="form-field">
+            <label for="centreName">Tutorial Centre Name</label>
+            <input id="centreName" name="centreName" type="text" placeholder="Your Tutorial Centre" required>
+          </div>
+
+          <div class="form-field">
+            <label for="logo">Logo Upload</label>
+            <input id="logo" name="logo" type="file" accept="image/*">
+            <div class="logo-preview">
+              <img id="logoPreview" alt="" />
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3 class="subsection-title">Question Types</h3>
+        <div class="form-row">
+          <label class="checkbox">
+            <input type="checkbox" id="qtMC" name="questionTypes" value="MC" checked>
+            <span>Multiple Choice (MC)</span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="qtLong" name="questionTypes" value="Long">
+            <span>Long Answer Questions</span>
+          </label>
+        </div>
+
+        <h3 class="subsection-title">Difficulty Distribution</h3>
+        <div class="form-grid thirds">
+          <div class="form-field">
+            <label for="basicCount">Basic Questions</label>
+            <input id="basicCount" name="basicCount" type="number" min="0" step="1" value="5">
+          </div>
+          <div class="form-field">
+            <label for="intermediateCount">Intermediate Questions</label>
+            <input id="intermediateCount" name="intermediateCount" type="number" min="0" step="1" value="5">
+          </div>
+          <div class="form-field">
+            <label for="advancedCount">Advanced Questions</label>
+            <input id="advancedCount" name="advancedCount" type="number" min="0" step="1" value="5">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="notes">Additional Notes</label>
+          <textarea id="notes" name="notes" rows="4" placeholder="Special instructions or constraints"></textarea>
+        </div>
+
+        <h3 class="subsection-title">API Settings</h3>
+        <div class="form-field">
+          <label for="apiKey">DeepSeek API Key</label>
+          <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+        </div>
+      </form>
+
+      <div id="statusBar" class="status hidden">
+        <div class="spinner"></div>
+        <span id="statusText">Preparing...</span>
+      </div>
+    </section>
+
+    <aside class="card preview-card">
+      <div class="preview-header">
+        <div class="preview-logo">
+          <img id="previewLogo" alt="">
+        </div>
+        <div class="preview-meta">
+          <div class="preview-centre" id="previewCentre">Tutorial Centre</div>
+          <div class="preview-topic" id="previewTopic">Topic</div>
+        </div>
+      </div>
+
+      <div class="preview-body">
+        <div class="preview-tags" id="previewTags"></div>
+        <div class="preview-distro" id="previewDistro"></div>
+        <div class="preview-notes" id="previewNotes"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="app-footer">
+    <div class="container footer-inner">
+      <span>© <span id="year"></span> Worksheet Generator</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
