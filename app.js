@@ -27,6 +27,8 @@ document.addEventListener("DOMContentLoaded", function () {
   var generateBtn = document.getElementById("generateBtn");
   var downloadWorksheetBtn = document.getElementById("downloadWorksheetBtn");
   var downloadSolutionBtn = document.getElementById("downloadSolutionBtn");
+  var downloadWorksheetTexBtn = document.getElementById("downloadWorksheetTexBtn");
+  var downloadSolutionTexBtn = document.getElementById("downloadSolutionTexBtn");
 
   function updateYear() {
     if (yearEl) yearEl.textContent = String(new Date().getFullYear());
@@ -526,6 +528,97 @@ document.addEventListener("DOMContentLoaded", function () {
     doc.save("Solution.pdf");
   }
 
+  function safeTex(s) {
+    if (!s) return "";
+    var str = String(s);
+    var parts = str.split(/(\$[^$]+\$)/g);
+    return parts.map(function (p) {
+      if (p.startsWith("$") && p.endsWith("$")) return p;
+      return p
+        .replace(/\\/g, "\\textbackslash{}")
+        .replace(/\{/g, "\\{")
+        .replace(/\}/g, "\\}")
+        .replace(/&/g, "\\&")
+        .replace(/%/g, "\\%")
+        .replace(/#/g, "\\#")
+        .replace(/_/g, "\\_")
+        .replace(/\^/g, "\\textasciicircum{}")
+        .replace(/~/g, "\\textasciitilde{}");
+    }).join("");
+  }
+
+  function generateTeX(questions, meta, isSolution) {
+    var title = isSolution ? "Solution / Marking Scheme" : "Worksheet";
+    var lines = [];
+    lines.push("\\documentclass[12pt, a4paper]{article}");
+    lines.push("\\usepackage{amsmath, amssymb}");
+    lines.push("\\usepackage{xeCJK}");
+    lines.push("% Note: If 'Microsoft JhengHei' is not available on your system, please change the font name below (e.g., 'PingFang TC' on Mac, 'Noto Sans CJK' on Linux).");
+    lines.push("\\setCJKmainfont{Microsoft JhengHei}");
+    lines.push("\\usepackage{geometry}");
+    lines.push("\\geometry{left=2cm, right=2cm, top=2cm, bottom=2cm}");
+    lines.push("\\usepackage{fancyhdr}");
+    lines.push("\\pagestyle{fancy}");
+    lines.push("\\fancyhf{}");
+    lines.push("\\lhead{" + safeTex(meta.topic) + "}");
+    lines.push("\\rhead{" + safeTex(meta.centre) + "}");
+    lines.push("\\cfoot{\\thepage}");
+    lines.push("\\setlength{\\parindent}{0pt}");
+    lines.push("\\setlength{\\parskip}{1em}");
+    lines.push("");
+    lines.push("\\begin{document}");
+    lines.push("\\begin{center}");
+    lines.push("{\\Large \\textbf{" + safeTex(meta.topic) + " -- " + title + "}}");
+    lines.push("\\end{center}");
+    lines.push("");
+    
+    var groups = groupByDifficulty(questions);
+    ["Basic", "Intermediate", "Advanced"].forEach(function(level) {
+      var list = groups[level] || [];
+      if (!list.length) return;
+      lines.push("\\section*{" + level + "}");
+      lines.push("\\begin{enumerate}");
+      list.forEach(function(q) {
+        lines.push("\\item " + safeTex(q.text));
+        if (q.type === "MC" && q.options && q.options.length) {
+          lines.push("\\begin{itemize}");
+          q.options.forEach(function(opt) {
+            lines.push("\\item " + safeTex(opt));
+          });
+          lines.push("\\end{itemize}");
+        }
+        if (isSolution) {
+          lines.push("\\par \\textbf{Solution:} " + safeTex(q.solution));
+          if (q.type === "MC") {
+            lines.push("\\par \\textbf{Answer:} " + safeTex(q.answer));
+          }
+        } else {
+          if (q.type === "Long") {
+             lines.push("\\vspace{4cm}");
+          } else {
+             lines.push("\\vspace{1cm}");
+          }
+        }
+        lines.push("");
+      });
+      lines.push("\\end{enumerate}");
+    });
+    lines.push("\\end{document}");
+    return lines.join("\\n");
+  }
+
+  function downloadStringAsFile(content, filename) {
+    var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+  }
+
   function localGenerateQuestions(formData, lang) {
     var out = [];
     var idx = 1;
@@ -534,10 +627,10 @@ document.addEventListener("DOMContentLoaded", function () {
         var baseText = lang === "zh" ? "求解方程" : "Solve the equation";
         var tex = i % 2 === 0 ? "x^2+5x+6=0" : "\\int_0^1 x^2\\,dx";
         var solTex = i % 2 === 0 ? "x=-2,\\;x=-3" : "\\frac{1}{3}";
-        var mcOpts = ["A) 1", "B) 2", "C) 3", "D) 4"];
+        var mcOpts = ["A) $1$", "B) $2$", "C) $3$", "D) $4$"];
         var ans = "A";
-        var text = baseText + ": " + (i % 2 === 0 ? "x^2 + 5x + 6 = 0" : "∫₀¹ x² dx");
-        var solution = i % 2 === 0 ? "Factor to (x+2)(x+3)=0; roots -2 and -3." : "Integrate x² to x³/3; evaluate at 1 to get 1/3.";
+        var text = baseText + ": $" + tex + "$";
+        var solution = i % 2 === 0 ? "Factor to $(x+2)(x+3)=0$; roots $-2$ and $-3$." : "Integrate $x^2$ to $x^3/3$; evaluate at $1$ to get $1/3$.";
         out.push({
           id: String(idx++),
           difficulty: difficulty,
@@ -737,6 +830,8 @@ document.addEventListener("DOMContentLoaded", function () {
     generateBtn.disabled = true;
     downloadWorksheetBtn.disabled = true;
     downloadSolutionBtn.disabled = true;
+    downloadWorksheetTexBtn.disabled = true;
+    downloadSolutionTexBtn.disabled = true;
     if (!apiKey) {
       var formDataNoKey = collectForm();
       var langNoKey = detectLanguage(formDataNoKey.subject + " " + formDataNoKey.notes);
@@ -748,9 +843,11 @@ document.addEventListener("DOMContentLoaded", function () {
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetBtn.disabled = false;
+        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionBtn.disabled = false;
+          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -789,9 +886,11 @@ document.addEventListener("DOMContentLoaded", function () {
         return buildTeXAssets(window.GeneratedQuestions).then(function () {
           statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
           downloadWorksheetBtn.disabled = false;
+          downloadWorksheetTexBtn.disabled = false;
           setTimeout(function () {
             statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
             downloadSolutionBtn.disabled = false;
+            downloadSolutionTexBtn.disabled = false;
           }, 400);
         }).finally(function () {
           generateBtn.disabled = false;
@@ -815,9 +914,11 @@ document.addEventListener("DOMContentLoaded", function () {
       buildTeXAssets(window.GeneratedQuestions).then(function () {
         statusTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetBtn.disabled = false;
+        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionBtn.disabled = false;
+          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -835,9 +936,11 @@ document.addEventListener("DOMContentLoaded", function () {
       buildTeXAssets(window.GeneratedQuestions).then(function () {
         statusTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
         downloadWorksheetBtn.disabled = false;
+        downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui3 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionBtn.disabled = false;
+          downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
@@ -867,6 +970,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Disable downloads immediately
     downloadWorksheetBtn.disabled = true;
     downloadSolutionBtn.disabled = true;
+    downloadWorksheetTexBtn.disabled = true;
+    downloadSolutionTexBtn.disabled = true;
     generateWithDeepSeek();
   });
 
@@ -895,6 +1000,32 @@ document.addEventListener("DOMContentLoaded", function () {
       topic: formData.subject,
       logoDataUrl: previewLogoEl && previewLogoEl.src ? previewLogoEl.src : null
     });
+  });
+
+  downloadWorksheetTexBtn.addEventListener("click", function () {
+    var formData = collectForm();
+    var lang = detectLanguage(formData.subject + " " + formData.notes);
+    var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
+      ? window.GeneratedQuestions
+      : localGenerateQuestions(formData, lang);
+    var tex = generateTeX(questions, {
+      centre: formData.centre,
+      topic: formData.subject
+    }, false);
+    downloadStringAsFile(tex, "Worksheet.tex");
+  });
+
+  downloadSolutionTexBtn.addEventListener("click", function () {
+    var formData = collectForm();
+    var lang = detectLanguage(formData.subject + " " + formData.notes);
+    var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
+      ? window.GeneratedQuestions
+      : localGenerateQuestions(formData, lang);
+    var tex = generateTeX(questions, {
+      centre: formData.centre,
+      topic: formData.subject
+    }, true);
+    downloadStringAsFile(tex, "Solution.tex");
   });
 
   updateYear();
