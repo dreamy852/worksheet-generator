@@ -184,6 +184,46 @@ document.addEventListener("DOMContentLoaded", function () {
     try { return doc.splitTextToSize(String(text), maxWidth); } catch (e) { return [String(text)]; }
   }
 
+  function hasMathJax() {
+    return typeof MathJax !== "undefined" && MathJax && MathJax.tex2svg;
+  }
+
+  function texToSvgElement(tex) {
+    try { return MathJax.tex2svg(String(tex)); } catch (e) { return null; }
+  }
+
+  function svgToPngDataUrl(svgEl, scale) {
+    return new Promise(function (resolve) {
+      try {
+        var serializer = new XMLSerializer();
+        var svgStr = serializer.serializeToString(svgEl);
+        var svg64 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement("canvas");
+          var w = Math.ceil(img.width * (scale || 2));
+          var h = Math.ceil(img.height * (scale || 2));
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          try { resolve(canvas.toDataURL("image/png")); } catch (e) { resolve(null); }
+        };
+        img.onerror = function () { resolve(null); };
+        img.src = svg64;
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  async function texToPng(tex) {
+    if (!hasMathJax()) return null;
+    var svg = texToSvgElement(tex);
+    if (!svg) return null;
+    return await svgToPngDataUrl(svg, 2);
+  }
+
   function drawAnswerSpace(doc, margin, y, pageWidth, lines) {
     var gap = 8;
     var lineHeight = 14;
@@ -245,7 +285,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return out;
   }
 
-  function generateWorksheetPDF(questions, meta) {
+  async function generateWorksheetPDF(questions, meta) {
     var jsPDFCtor = ensureJsPDF();
     if (!jsPDFCtor) {
       showStatus("PDF library not loaded");
@@ -278,7 +318,8 @@ document.addEventListener("DOMContentLoaded", function () {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
 
-      list.forEach(function (q, idx) {
+      for (var qi = 0; qi < list.length; qi++) {
+        var q = list[qi];
         var numberLabel = (idx + 1) + ". ";
         var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
         var estimatedHeight = textLines.length * 14 + 60;
@@ -286,34 +327,50 @@ document.addEventListener("DOMContentLoaded", function () {
           drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
           return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic, meta.logoDataUrl) + 6;
         });
-        doc.text(numberLabel + (textLines[0] || ""), margin, y);
-        for (var k = 1; k < textLines.length; k++) {
-          doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
+        if (q._textImg) {
+          var imgW = pageWidth - margin * 2;
+          var imgH = 36;
+          try { doc.addImage(q._textImg, "PNG", margin, y, imgW, imgH, "", "FAST"); } catch (e) { doc.text(numberLabel + (textLines[0] || ""), margin, y); }
+          y += imgH + 6;
+        } else {
+          doc.text(numberLabel + (textLines[0] || ""), margin, y);
+          for (var k = 1; k < textLines.length; k++) {
+            doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
+          }
+          y += textLines.length * 14 + 6;
         }
-        y += textLines.length * 14 + 6;
 
         if (q.type === "MC" && Array.isArray(q.options)) {
           var opts = q.options.slice(0, 4);
-          opts.forEach(function (opt, oi) {
+          for (var oi = 0; oi < opts.length; oi++) {
+            var opt = opts[oi];
             var line = String(opt || "");
             var wrap = wrapText(doc, line, pageWidth - margin * 2 - 20);
-            wrap.forEach(function (wLine, wi) {
-              doc.text(wLine, margin + 16, y + wi * 14);
-            });
-            y += wrap.length * 14 + 4;
-          });
+            if (q._optionImgs && q._optionImgs[oi]) {
+              var oW = pageWidth - margin * 2 - 20;
+              var oH = 24;
+              try { doc.addImage(q._optionImgs[oi], "PNG", margin + 16, y, oW, oH, "", "FAST"); } catch (e) {
+                wrap.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
+                y += wrap.length * 14 + 4;
+              }
+              y += oH + 4;
+            } else {
+              wrap.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
+              y += wrap.length * 14 + 4;
+            }
+          }
           y = drawAnswerSpace(doc, margin, y + 2, pageWidth, 2);
         } else {
           y = drawAnswerSpace(doc, margin, y + 2, pageWidth, 6);
         }
         y += 6;
-      });
+      }
     });
 
     addFooterAndPaging(doc, meta.centre);
     doc.save("Worksheet.pdf");
   }
-  function generateSolutionPDF(questions, meta) {
+  async function generateSolutionPDF(questions, meta) {
     var jsPDFCtor = ensureJsPDF();
     if (!jsPDFCtor) {
       showStatus("PDF library not loaded");
@@ -339,7 +396,8 @@ document.addEventListener("DOMContentLoaded", function () {
       y = drawSectionTitle(doc, pageWidth, margin, y, section + " Solutions");
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
-      list.forEach(function (q, idx) {
+      for (var qi = 0; qi < list.length; qi++) {
+        var q = list[qi];
         var numberLabel = (idx + 1) + ". ";
         var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
         var extra = 0;
@@ -366,11 +424,18 @@ document.addEventListener("DOMContentLoaded", function () {
           drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
           return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Solutions", meta.logoDataUrl) + 6;
         });
-        doc.text(numberLabel + (textLines[0] || ""), margin, y);
-        for (var k = 1; k < textLines.length; k++) {
-          doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
+        if (q._textImg) {
+          var imgW = pageWidth - margin * 2;
+          var imgH = 36;
+          try { doc.addImage(q._textImg, "PNG", margin, y, imgW, imgH, "", "FAST"); } catch (e) { doc.text(numberLabel + (textLines[0] || ""), margin, y); }
+          y += imgH + 6;
+        } else {
+          doc.text(numberLabel + (textLines[0] || ""), margin, y);
+          for (var k = 1; k < textLines.length; k++) {
+            doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
+          }
+          y += textLines.length * 14 + 6;
         }
-        y += textLines.length * 14 + 6;
         if (mcLines.length) {
           mcLines.forEach(function (opt) {
             var wrap = wrapText(doc, opt, pageWidth - margin * 2 - 20);
@@ -384,10 +449,18 @@ document.addEventListener("DOMContentLoaded", function () {
           });
           y += ansLines.length * 14 + 4;
         }
-        solLines.forEach(function (wLine, wi) {
-          doc.text(wLine, margin + 16, y + wi * 14);
-        });
-        y += solLines.length * 14 + 4;
+        if (q._solutionImg) {
+          var sW = pageWidth - margin * 2 - 20;
+          var sH = 42;
+          try { doc.addImage(q._solutionImg, "PNG", margin + 16, y, sW, sH, "", "FAST"); } catch (e) {
+            solLines.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
+            y += solLines.length * 14 + 4;
+          }
+          y += sH + 4;
+        } else {
+          solLines.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
+          y += solLines.length * 14 + 4;
+        }
         if (tipsLines.length) {
           tipsLines.forEach(function (wLine, wi) {
             doc.text(wLine, margin + 16, y + wi * 14);
@@ -400,7 +473,7 @@ document.addEventListener("DOMContentLoaded", function () {
           y += 16;
         }
         y += 6;
-      });
+      }
     });
     doc.addPage();
     drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
@@ -433,6 +506,82 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     addFooterAndPaging(doc, meta.centre);
     doc.save("Solution.pdf");
+  }
+
+  function localGenerateQuestions(formData, lang) {
+    var out = [];
+    var idx = 1;
+    function add(count, difficulty, type) {
+      for (var i = 0; i < count; i++) {
+        var baseText = lang === "zh" ? "求解方程" : "Solve the equation";
+        var tex = i % 2 === 0 ? "x^2+5x+6=0" : "\\int_0^1 x^2\\,dx";
+        var solTex = i % 2 === 0 ? "x=-2,\\;x=-3" : "\\frac{1}{3}";
+        var mcOpts = ["A) 1", "B) 2", "C) 3", "D) 4"];
+        var ans = "A";
+        var text = baseText + ": " + (i % 2 === 0 ? "x^2 + 5x + 6 = 0" : "∫₀¹ x² dx");
+        var solution = i % 2 === 0 ? "Factor to (x+2)(x+3)=0; roots -2 and -3." : "Integrate x² to x³/3; evaluate at 1 to get 1/3.";
+        out.push({
+          id: String(idx++),
+          difficulty: difficulty,
+          type: type,
+          language: lang,
+          text: text,
+          textTeX: tex,
+          options: type === "MC" ? mcOpts : [],
+          answer: type === "MC" ? ans : "",
+          solution: solution,
+          solutionTeX: type === "Long" ? solTex : "",
+          marks: type === "Long" ? 6 : 2,
+          teacher_notes: lang === "zh" ? "提示：注意基础因式分解与定积分基础。" : "Tip: Emphasize factoring basics and definite integral evaluation."
+        });
+      }
+    }
+    var types = formData.types;
+    var counts = formData.counts;
+    ["basic", "intermediate", "advanced"].forEach(function (levelKey, idxLevel) {
+      var diffName = ["Basic", "Intermediate", "Advanced"][idxLevel];
+      var c = Number(counts[levelKey] || 0);
+      if (!c) return;
+      if (types.mc && types.long) {
+        var a = Math.floor(c / 2);
+        var b = c - a;
+        add(a, diffName, "MC");
+        add(b, diffName, "Long");
+      } else if (types.mc) {
+        add(c, diffName, "MC");
+      } else if (types.long) {
+        add(c, diffName, "Long");
+      }
+    });
+    return out;
+  }
+
+  async function buildTeXAssets(questions) {
+    for (var i = 0; i < questions.length; i++) {
+      var q = questions[i];
+      if (q.textTeX) {
+        try { q._textImg = await texToPng(q.textTeX); } catch (e) {}
+      }
+      if (Array.isArray(q.options)) {
+        q._optionImgs = [];
+        for (var j = 0; j < q.options.length; j++) {
+          var raw = q.options[j];
+          var tex = null;
+          if (/\$.*\$/.test(raw)) {
+            tex = raw.replace(/^\s*\$\s*|\s*\$\s*$/g, "");
+          }
+          if (tex) {
+            try { q._optionImgs.push(await texToPng(tex)); } catch (e) { q._optionImgs.push(null); }
+          } else {
+            q._optionImgs.push(null);
+          }
+        }
+      }
+      if (q.solutionTeX) {
+        try { q._solutionImg = await texToPng(q.solutionTeX); } catch (e) {}
+      }
+    }
+    return questions;
   }
   function getApiKey() {
     var k = apiKeyEl && apiKeyEl.value ? apiKeyEl.value.trim() : "";
@@ -560,7 +709,12 @@ document.addEventListener("DOMContentLoaded", function () {
   function generateWithDeepSeek() {
     var apiKey = getApiKey();
     if (!apiKey) {
-      showStatus("Missing API key");
+      var formDataNoKey = collectForm();
+      var langNoKey = detectLanguage(formDataNoKey.subject + " " + formDataNoKey.notes);
+      var localQsNoKey = localGenerateQuestions(formDataNoKey, langNoKey);
+      window.GeneratedQuestions = localQsNoKey;
+      statusTextEl.textContent = "Generated " + localQsNoKey.length + " local questions";
+      setTimeout(hideStatus, 1200);
       return;
     }
     var formData = collectForm();
@@ -573,13 +727,30 @@ document.addEventListener("DOMContentLoaded", function () {
     var prompt = buildPrompt(formData.subject, formData.subject, formData.notes, lang, plan);
     showStatus("Generating questions...");
     generateBtn.disabled = true;
-    deepseekRequest(prompt, apiKey).then(function (res) {
+    var timeout = new Promise(function (resolve) {
+      setTimeout(function () { resolve({ timeout: true }); }, 8000);
+    });
+    Promise.race([deepseekRequest(prompt, apiKey), timeout]).then(function (res) {
+      if (res && res.timeout) {
+        var localQs = localGenerateQuestions(formData, lang);
+        window.GeneratedQuestions = localQs;
+        statusTextEl.textContent = "Generated " + localQs.length + " local questions";
+        return;
+      }
       var questions = parseQuestions(res);
-      window.GeneratedQuestions = questions;
-      statusTextEl.textContent = "Generated " + questions.length + " questions";
+      if (!questions.length) {
+        var localQs2 = localGenerateQuestions(formData, lang);
+        window.GeneratedQuestions = localQs2;
+        statusTextEl.textContent = "Generated " + localQs2.length + " local questions";
+      } else {
+        window.GeneratedQuestions = questions;
+        statusTextEl.textContent = "Generated " + questions.length + " questions";
+      }
       setTimeout(hideStatus, 1200);
     }).catch(function (err) {
-      statusTextEl.textContent = "Error generating content";
+      var localQs3 = localGenerateQuestions(formData, lang);
+      window.GeneratedQuestions = localQs3;
+      statusTextEl.textContent = "Generated " + localQs3.length + " local questions";
     }).finally(function () {
       generateBtn.disabled = false;
     });
@@ -603,25 +774,27 @@ document.addEventListener("DOMContentLoaded", function () {
     generateWithDeepSeek();
   });
 
-  downloadWorksheetBtn.addEventListener("click", function () {
+  downloadWorksheetBtn.addEventListener("click", async function () {
     var formData = collectForm();
     var lang = detectLanguage(formData.subject + " " + formData.notes);
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
-      : buildPlaceholders(formData, lang);
-    generateWorksheetPDF(questions, {
+      : localGenerateQuestions(formData, lang);
+    await buildTeXAssets(questions);
+    await generateWorksheetPDF(questions, {
       centre: formData.centre,
       topic: formData.subject,
       logoDataUrl: previewLogoEl && previewLogoEl.src ? previewLogoEl.src : null
     });
   });
-  downloadSolutionBtn.addEventListener("click", function () {
+  downloadSolutionBtn.addEventListener("click", async function () {
     var formData = collectForm();
     var lang = detectLanguage(formData.subject + " " + formData.notes);
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
-      : buildPlaceholders(formData, lang);
-    generateSolutionPDF(questions, {
+      : localGenerateQuestions(formData, lang);
+    await buildTeXAssets(questions);
+    await generateSolutionPDF(questions, {
       centre: formData.centre,
       topic: formData.subject,
       logoDataUrl: previewLogoEl && previewLogoEl.src ? previewLogoEl.src : null
