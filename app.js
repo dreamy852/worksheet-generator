@@ -341,7 +341,9 @@ document.addEventListener("DOMContentLoaded", function () {
       html.push('<ol style="margin: 0; padding-left: 25px;">');
       
       list.forEach(function(q, idx) {
-        html.push('<li style="margin-bottom: 20px;">');
+        // Add extra spacing after every 4 questions
+        var extraMarginBottom = ((idx + 1) % 4 === 0 && idx < list.length - 1) ? '40px' : '20px';
+        html.push('<li style="margin-bottom: ' + extraMarginBottom + ';">');
         html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
         
         if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
@@ -399,7 +401,9 @@ document.addEventListener("DOMContentLoaded", function () {
       html.push('<ol style="margin: 0; padding-left: 25px;">');
       
       list.forEach(function(q, idx) {
-        html.push('<li style="margin-bottom: 25px;">');
+        // Add extra spacing after every 4 questions
+        var extraMarginBottom = ((idx + 1) % 4 === 0 && idx < list.length - 1) ? '45px' : '25px';
+        html.push('<li style="margin-bottom: ' + extraMarginBottom + ';">');
         html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
         
         if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
@@ -468,7 +472,10 @@ document.addEventListener("DOMContentLoaded", function () {
     html.push('<ol style="margin: 0; padding-left: 25px;">');
     
     questions.forEach(function(q, idx) {
-      html.push('<li style="margin-bottom: ' + (isSolution ? '25px' : '20px') + ';">');
+      // Add extra spacing after every 4 questions
+      var baseMargin = isSolution ? '25px' : '20px';
+      var extraMarginBottom = ((idx + 1) % 4 === 0 && idx < questions.length - 1) ? (isSolution ? '45px' : '40px') : baseMargin;
+      html.push('<li style="margin-bottom: ' + extraMarginBottom + ';">');
       html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
       
       if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
@@ -649,10 +656,12 @@ document.addEventListener("DOMContentLoaded", function () {
       // Topic detection
       var topicLower = (topic || "").toLowerCase();
       var notesLower = (formData.notes || "").toLowerCase();
-      var isIndices = /indices?|指數|指數律/.test(topicLower + notesLower);
-      var isAlgebra = /algebra|代數|equation|方程/.test(topicLower + notesLower);
-      var isCalculus = /calculus|微積分|integral|積分|derivative|導數/.test(topicLower + notesLower);
-      var isGeometry = /geometry|幾何|triangle|三角形/.test(topicLower + notesLower);
+      var combinedText = topicLower + " " + notesLower;
+      var isIndices = /indices?|指數|指數律/.test(combinedText);
+      var isAlgebra = /algebra|代數|equation|方程/.test(combinedText);
+      var isCalculus = /calculus|微積分|integral|積分|derivative|導數/.test(combinedText);
+      var isGeometry = /geometry|幾何|triangle|三角形/.test(combinedText);
+      var isEnglish = /english|英文|grammar|語法|sentence|句子|vocabulary|詞彙|tense|時態|verb|動詞/.test(combinedText);
       
       var text, solution, mcOpts, answer, marks, teacherNotes;
       
@@ -789,6 +798,111 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         }
         teacherNotes = lang === "zh" ? "提示：注意解方程的步驟和方法。" : "Tip: Pay attention to the steps and methods for solving equations.";
+      } else if (isEnglish) {
+        // English/Grammar questions
+        var grammarTopics = [
+          {q: lang === "zh" ? "選擇正確的動詞形式：I ___ to the store yesterday. (go)" : "Choose the correct verb form: I ___ to the store yesterday. (go)",
+           opts: ["went", "go", "goes", "going"],
+           ans: "A",
+           sol: lang === "zh" ? "過去時使用 'went'。" : "Use 'went' for past tense."},
+          {q: lang === "zh" ? "選擇正確的代詞：This is ___ book. (my/mine)" : "Choose the correct pronoun: This is ___ book. (my/mine)",
+           opts: ["my", "mine", "I", "me"],
+           ans: "A",
+           sol: lang === "zh" ? "'my' 是形容詞性物主代詞，修飾名詞。" : "'my' is a possessive adjective that modifies nouns."},
+          {q: lang === "zh" ? "選擇正確的介詞：She is good ___ mathematics. (at/in/on)" : "Choose the correct preposition: She is good ___ mathematics. (at/in/on)",
+           opts: ["at", "in", "on", "for"],
+           ans: "A",
+           sol: lang === "zh" ? "固定搭配：be good at something。" : "Fixed expression: be good at something."},
+          {q: lang === "zh" ? "選擇正確的時態：He ___ TV every evening. (watch)" : "Choose the correct tense: He ___ TV every evening. (watch)",
+           opts: ["watches", "watch", "watching", "watched"],
+           ans: "A",
+           sol: lang === "zh" ? "第三人稱單數現在時使用 'watches'。" : "Third person singular present tense uses 'watches'."},
+          {q: lang === "zh" ? "選擇正確的比較級：This book is ___ than that one. (interesting)" : "Choose the correct comparative: This book is ___ than that one. (interesting)",
+           opts: ["more interesting", "interestinger", "most interesting", "interesting"],
+           ans: "A",
+           sol: lang === "zh" ? "多音節形容詞使用 'more' 構成比較級。" : "Multi-syllable adjectives use 'more' to form comparatives."},
+          {q: lang === "zh" ? "選擇正確的冠詞：I saw ___ elephant at the zoo. (a/an/the)" : "Choose the correct article: I saw ___ elephant at the zoo. (a/an/the)",
+           opts: ["an", "a", "the", "no article"],
+           ans: "A",
+           sol: lang === "zh" ? "'elephant' 以元音開頭，使用 'an'。" : "'elephant' starts with a vowel sound, use 'an'."},
+          {q: lang === "zh" ? "選擇正確的詞序：___ do you go to school?" : "Choose the correct word order: ___ do you go to school?",
+           opts: ["How often", "How often do", "How do often", "Do how often"],
+           ans: "A",
+           sol: lang === "zh" ? "疑問詞 'How often' 在句首。" : "Question word 'How often' comes at the beginning."},
+          {q: lang === "zh" ? "選擇正確的被動語態：The letter ___ by him yesterday. (write)" : "Choose the correct passive voice: The letter ___ by him yesterday. (write)",
+           opts: ["was written", "written", "was writing", "writes"],
+           ans: "A",
+           sol: lang === "zh" ? "過去時被動語態：was/were + past participle。" : "Past tense passive: was/were + past participle."}
+        ];
+        
+        if (difficulty === "Basic") {
+          if (type === "MC") {
+            var grammarIdx = (qNum - 1) % grammarTopics.length;
+            var grammarQ = grammarTopics[grammarIdx];
+            text = grammarQ.q;
+            mcOpts = grammarQ.opts.map(function(opt, i) {
+              return String.fromCharCode(65 + i) + ") " + opt;
+            });
+            answer = grammarQ.ans;
+            solution = grammarQ.sol;
+          } else {
+            var longGrammarTasks = [
+              lang === "zh" ? "將以下句子改寫為過去時：'She goes to school every day.'" : "Rewrite the following sentence in past tense: 'She goes to school every day.'",
+              lang === "zh" ? "將以下句子改寫為否定句：'I have finished my homework.'" : "Rewrite the following sentence as a negative: 'I have finished my homework.'",
+              lang === "zh" ? "用適當的介詞填空：'She is interested ___ learning English.'" : "Fill in the blank with the appropriate preposition: 'She is interested ___ learning English.'",
+              lang === "zh" ? "將以下句子改寫為疑問句：'They are playing football.'" : "Rewrite the following sentence as a question: 'They are playing football.'",
+              lang === "zh" ? "改正以下句子的錯誤：'He don't like apples.'" : "Correct the error in the following sentence: 'He don't like apples.'"
+            ];
+            text = longGrammarTasks[(qNum - 1) % longGrammarTasks.length];
+            solution = lang === "zh" ? "答案示例：（請根據具體題目提供完整答案）" : "Sample answer: (Please provide a complete answer based on the specific question)";
+            marks = 4;
+          }
+        } else if (difficulty === "Intermediate") {
+          if (type === "MC") {
+            var grammarIdx2 = (qNum + 2) % grammarTopics.length;
+            var grammarQ2 = grammarTopics[grammarIdx2];
+            text = grammarQ2.q;
+            mcOpts = grammarQ2.opts.map(function(opt, i) {
+              return String.fromCharCode(65 + i) + ") " + opt;
+            });
+            answer = grammarQ2.ans;
+            solution = grammarQ2.sol;
+          } else {
+            var longGrammarTasks2 = [
+              lang === "zh" ? "將以下句子改寫為間接引語：'She said, \"I am tired.\"'" : "Rewrite the following sentence in reported speech: 'She said, \"I am tired.\"'",
+              lang === "zh" ? "將以下句子改寫為被動語態：'Someone stole my bicycle.'" : "Rewrite the following sentence in passive voice: 'Someone stole my bicycle.'",
+              lang === "zh" ? "用適當的條件句填空：'If it ___ (rain), we will stay at home.'" : "Fill in the blank with the appropriate conditional: 'If it ___ (rain), we will stay at home.'",
+              lang === "zh" ? "將以下句子改寫為完成時：'I do my homework.'" : "Rewrite the following sentence in perfect tense: 'I do my homework.'",
+              lang === "zh" ? "改正以下句子的錯誤：'Neither of the students are present.'" : "Correct the error in the following sentence: 'Neither of the students are present.'"
+            ];
+            text = longGrammarTasks2[(qNum - 1) % longGrammarTasks2.length];
+            solution = lang === "zh" ? "答案示例：（請根據具體題目提供完整答案）" : "Sample answer: (Please provide a complete answer based on the specific question)";
+            marks = 5;
+          }
+        } else { // Advanced
+          if (type === "MC") {
+            var grammarIdx3 = (qNum + 4) % grammarTopics.length;
+            var grammarQ3 = grammarTopics[grammarIdx3];
+            text = grammarQ3.q;
+            mcOpts = grammarQ3.opts.map(function(opt, i) {
+              return String.fromCharCode(65 + i) + ") " + opt;
+            });
+            answer = grammarQ3.ans;
+            solution = grammarQ3.sol;
+          } else {
+            var longGrammarTasks3 = [
+              lang === "zh" ? "將以下句子改寫為強調句型：'I met him yesterday.'" : "Rewrite the following sentence using emphasis: 'I met him yesterday.'",
+              lang === "zh" ? "將以下句子改寫為倒裝句：'I have never seen such a beautiful sunset.'" : "Rewrite the following sentence using inversion: 'I have never seen such a beautiful sunset.'",
+              lang === "zh" ? "用適當的虛擬語氣填空：'I wish I ___ (be) a bird.'" : "Fill in the blank with the appropriate subjunctive: 'I wish I ___ (be) a bird.'",
+              lang === "zh" ? "將以下句子改寫為非限制性定語從句：'My teacher is very kind. She helps me a lot.'" : "Rewrite the following using a non-restrictive relative clause: 'My teacher is very kind. She helps me a lot.'",
+              lang === "zh" ? "改正以下句子的錯誤：'The number of students have increased.'" : "Correct the error in the following sentence: 'The number of students have increased.'"
+            ];
+            text = longGrammarTasks3[(qNum - 1) % longGrammarTasks3.length];
+            solution = lang === "zh" ? "答案示例：（請根據具體題目提供完整答案）" : "Sample answer: (Please provide a complete answer based on the specific question)";
+            marks = 6;
+          }
+        }
+        teacherNotes = lang === "zh" ? "提示：注意英語語法規則和句型結構。" : "Tip: Pay attention to English grammar rules and sentence structures.";
       } else {
         // Default: Mixed topics
         var topics = [
@@ -929,25 +1043,50 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function buildPrompt(subject, topic, notes, language, plan) {
     var lines = [];
-    lines.push("Role: Expert education content writer.");
+    lines.push("You are an expert education content writer specializing in creating high-quality educational questions and answers.");
     var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
     if (language === "zh") {
-      lines.push("Language: Traditional Chinese (繁體中文).");
+      lines.push("Generate all content in Traditional Chinese (繁體中文).");
     } else {
-      lines.push("Language: English.");
+      lines.push("Generate all content in English.");
     }
     lines.push("Subject: " + (subject || "General") + ".");
     lines.push("Topic: " + (topic || subject || "General") + ".");
-    if (notes && notes.trim()) lines.push("Constraints: " + notes.trim() + ".");
-    lines.push("Output only valid JSON with a root object {\"questions\": []}.");
-    lines.push("Each question object must include: id, difficulty, type, language, text, options (for MC), answer, solution, marks, teacher_notes.");
-    lines.push("Rules:");
-    lines.push("For Multiple Choice: include exactly 4 options (A,B,C,D); answer is the correct option letter; options must be plausible; avoid ambiguity.");
-    lines.push("For Long: include step-by-step solution and a concise mark scheme in \"solution\"; provide \"teacher_notes\" for difficult steps.");
+    if (notes && notes.trim()) {
+      lines.push("Additional requirements or constraints: " + notes.trim() + ".");
+    }
+    lines.push("");
+    lines.push("Output format: Return ONLY valid JSON with this exact structure: {\"questions\": [array of question objects]}");
+    lines.push("");
+    lines.push("Each question object must include these fields:");
+    lines.push("- id: unique identifier (string or number)");
+    lines.push("- difficulty: \"Basic\", \"Intermediate\", or \"Advanced\"");
+    lines.push("- type: \"MC\" (Multiple Choice) or \"Long\" (Long Answer)");
+    lines.push("- language: \"" + (language === "zh" ? "zh" : "en") + "\"");
+    lines.push("- text: the question text (use LaTeX math delimiters $ for inline math and $$ for display math if needed)");
+    lines.push("- options: array of exactly 4 strings for MC questions (empty array for Long questions)");
+    lines.push("- answer: the correct option letter (A/B/C/D) for MC, empty string for Long");
+    lines.push("- solution: detailed solution or answer explanation");
+    lines.push("- marks: number of marks allocated");
+    lines.push("- teacher_notes: helpful notes for teachers (optional)");
+    lines.push("");
+    lines.push("Rules for Multiple Choice questions:");
+    lines.push("- Provide exactly 4 options labeled A, B, C, D");
+    lines.push("- Answer field should be the correct option letter (A, B, C, or D)");
+    lines.push("- All options should be plausible and avoid ambiguity");
+    lines.push("- Use appropriate formatting for the subject (e.g., LaTeX for math, proper formatting for other subjects)");
+    lines.push("");
+    lines.push("Rules for Long Answer questions:");
+    lines.push("- Include step-by-step solution in the \"solution\" field");
+    lines.push("- Provide clear mark scheme or solution approach");
+    lines.push("- Add helpful \"teacher_notes\" for complex steps");
+    lines.push("");
     plan.forEach(function (p) {
-      lines.push("Generate " + p.count + " " + p.difficulty + " " + subject + " " + (p.type === "MC" ? "multiple choice" : "long answer") + " questions about " + (topic || subject) + ".");
+      lines.push("Generate " + p.count + " " + p.difficulty + " level " + (p.type === "MC" ? "multiple choice" : "long answer") + " question(s) about " + (topic || subject) + ".");
     });
-    return lines.join(" ");
+    lines.push("");
+    lines.push("Important: Respond with ONLY the JSON object, no additional text or explanation before or after.");
+    return lines.join("\n");
   }
 
   function deepseekRequest(prompt, apiKey) {
@@ -960,12 +1099,21 @@ document.addEventListener("DOMContentLoaded", function () {
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [
-          { role: "system", content: "You generate high-quality educational questions and answers." },
+          { role: "system", content: "You are an expert education content writer specializing in creating high-quality educational questions and answers." },
           { role: "user", content: prompt }
         ],
         temperature: 0.7
       })
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) {
+      if (!r.ok) {
+        return r.json().then(function(errData) {
+          return Promise.reject(errData);
+        }).catch(function() {
+          return Promise.reject({ error: { message: "HTTP " + r.status + " " + r.statusText } });
+        });
+      }
+      return r.json();
+    });
   }
 
   function tryExtractJson(text) {
@@ -1028,29 +1176,13 @@ document.addEventListener("DOMContentLoaded", function () {
     downloadWorksheetPdfBtn.disabled = true;
     downloadSolutionPdfBtn.disabled = true;
     if (!apiKey) {
-      var formDataNoKey = collectForm();
-      var langNoKey = detectLanguage(formDataNoKey.subject + " " + formDataNoKey.notes);
-      var localQsNoKey = localGenerateQuestions(formDataNoKey, langNoKey);
-      window.GeneratedQuestions = localQsNoKey;
-      statusTextEl.textContent = "Questions have been generated";
-      // Build TeX assets then enable buttons
-      buildTeXAssets(window.GeneratedQuestions).then(function () {
-        var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
-        statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-        downloadWorksheetPdfBtn.disabled = false;
-        setTimeout(function () {
-          statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-          downloadSolutionPdfBtn.disabled = false;
-        }, 400);
-      }).finally(function () {
-        generateBtn.disabled = false;
-      });
+      generateBtn.disabled = false;
       var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
-      if (completeBarEl && completeTextEl) {
-        completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
-        completeBarEl.classList.remove("hidden");
-      }
-      setTimeout(hideStatus, 1200);
+      var errorMsg = ui === "zh-hant" 
+        ? "錯誤：需要 DeepSeek API 金鑰才能生成題目。請在 API 設定中輸入您的 API 金鑰。" 
+        : "Error: DeepSeek API key is required to generate questions. Please enter your API key in the API Settings section.";
+      showStatus(errorMsg);
+      setTimeout(hideStatus, 5000);
       return;
     }
     var formData = collectForm();
@@ -1062,42 +1194,46 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
     var prompt = buildPrompt(formData.subject, formData.subject, formData.notes, lang, plan);
-    showStatus("Generating questions...");
+    showStatus("Generating questions with DeepSeek API...");
     var timeout = new Promise(function (resolve) {
-      setTimeout(function () { resolve({ timeout: true }); }, 8000);
+      setTimeout(function () { resolve({ timeout: true }); }, 30000); // Increased to 30 seconds
     });
     Promise.race([deepseekRequest(prompt, apiKey), timeout]).then(function (res) {
       if (res && res.timeout) {
-        var localQs = localGenerateQuestions(formData, lang);
-        window.GeneratedQuestions = localQs;
-        statusTextEl.textContent = "Questions have been generated";
+        generateBtn.disabled = false;
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
-        if (completeBarEl && completeTextEl) {
-          completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
-          completeBarEl.classList.remove("hidden");
-        }
-        return buildTeXAssets(window.GeneratedQuestions).then(function () {
-          updatePreview(); // Update preview after questions are generated
-          statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-          downloadWorksheetPdfBtn.disabled = false;
-          setTimeout(function () {
-            statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-            downloadSolutionPdfBtn.disabled = false;
-          }, 400);
-        }).finally(function () {
-          generateBtn.disabled = false;
-        });
+        var timeoutMsg = ui === "zh-hant"
+          ? "錯誤：API 請求超時。請檢查網絡連接並重試，或稍後再試。"
+          : "Error: API request timed out. Please check your network connection and try again, or try again later.";
+        showStatus(timeoutMsg);
+        setTimeout(hideStatus, 5000);
+        return;
+      }
+      // Check for API errors
+      if (res && res.error) {
+        generateBtn.disabled = false;
+        var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+        var errorMsg = res.error.message || (ui === "zh-hant" ? "API 錯誤" : "API Error");
+        var fullErrorMsg = ui === "zh-hant"
+          ? "錯誤：API 請求失敗 - " + errorMsg + "。請檢查您的 API 金鑰是否正確。"
+          : "Error: API request failed - " + errorMsg + ". Please check if your API key is correct.";
+        showStatus(fullErrorMsg);
+        setTimeout(hideStatus, 5000);
         return;
       }
       var questions = parseQuestions(res);
       if (!questions.length) {
-        var localQs2 = localGenerateQuestions(formData, lang);
-        window.GeneratedQuestions = localQs2;
-        statusTextEl.textContent = "Questions have been generated";
-      } else {
-        window.GeneratedQuestions = questions;
-        statusTextEl.textContent = "Questions have been generated";
+        generateBtn.disabled = false;
+        var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+        var parseErrorMsg = ui === "zh-hant"
+          ? "錯誤：無法解析 API 響應。請重試或檢查 API 響應格式。"
+          : "Error: Could not parse API response. Please try again or check the API response format.";
+        showStatus(parseErrorMsg);
+        setTimeout(hideStatus, 5000);
+        return;
       }
+      window.GeneratedQuestions = questions;
+      statusTextEl.textContent = "Questions have been generated";
       var ui2 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
       if (completeBarEl && completeTextEl) {
         completeTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
@@ -1116,27 +1252,14 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       setTimeout(hideStatus, 1200);
     }).catch(function (err) {
-      var localQs3 = localGenerateQuestions(formData, lang);
-      window.GeneratedQuestions = localQs3;
-      statusTextEl.textContent = "Questions have been generated";
+      generateBtn.disabled = false;
       var ui3 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
-      if (completeBarEl && completeTextEl) {
-        completeTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
-        completeBarEl.classList.remove("hidden");
-      }
-      buildTeXAssets(window.GeneratedQuestions).then(function () {
-        updatePreview(); // Update preview after questions are generated
-        statusTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-        downloadWorksheetPdfBtn.disabled = false;
-        setTimeout(function () {
-          statusTextEl.textContent = ui3 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-          downloadSolutionPdfBtn.disabled = false;
-        }, 400);
-      }).finally(function () {
-        generateBtn.disabled = false;
-      });
-    }).finally(function () {
-      // handled in branches
+      var errorMsg = ui3 === "zh-hant"
+        ? "錯誤：無法連接到 API 服務器。請檢查您的網絡連接和 API 金鑰，然後重試。錯誤信息：" + (err.message || String(err))
+        : "Error: Could not connect to API server. Please check your network connection and API key, then try again. Error: " + (err.message || String(err));
+      showStatus(errorMsg);
+      setTimeout(hideStatus, 5000);
+      console.error("API request error:", err);
     });
   }
 
