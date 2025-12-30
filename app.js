@@ -5,7 +5,6 @@ document.addEventListener("DOMContentLoaded", function () {
   var centreEl = document.getElementById("centreName");
   var logoEl = document.getElementById("logo");
   var logoPreviewEl = document.getElementById("logoPreview");
-  var previewLogoEl = document.getElementById("previewLogo");
   var mcBasicEl = document.getElementById("mcBasicCount");
   var mcInterEl = document.getElementById("mcIntermediateCount");
   var mcAdvEl = document.getElementById("mcAdvancedCount");
@@ -15,18 +14,14 @@ document.addEventListener("DOMContentLoaded", function () {
   var notesEl = document.getElementById("notes");
   var apiKeyEl = document.getElementById("apiKey");
   var uiLangEl = document.getElementById("uiLang");
-  var previewCentreEl = document.getElementById("previewCentre");
-  var previewTopicEl = document.getElementById("previewTopic");
-  var previewTagsEl = document.getElementById("previewTags");
-  var previewDistroEl = document.getElementById("previewDistro");
-  var previewNotesEl = document.getElementById("previewNotes");
+  var paperPreviewEl = document.getElementById("paperPreview");
   var statusBarEl = document.getElementById("statusBar");
   var statusTextEl = document.getElementById("statusText");
   var completeBarEl = document.getElementById("completeBar");
   var completeTextEl = document.getElementById("completeText");
   var generateBtn = document.getElementById("generateBtn");
-  var downloadWorksheetBtn = document.getElementById("downloadWorksheetBtn");
-  var downloadSolutionBtn = document.getElementById("downloadSolutionBtn");
+  var downloadWorksheetPdfBtn = document.getElementById("downloadWorksheetPdfBtn");
+  var downloadSolutionPdfBtn = document.getElementById("downloadSolutionPdfBtn");
   var downloadWorksheetTexBtn = document.getElementById("downloadWorksheetTexBtn");
   var downloadSolutionTexBtn = document.getElementById("downloadSolutionTexBtn");
 
@@ -35,31 +30,32 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function updatePreview() {
-    var centre = (centreEl.value || "").trim();
-    var subject = (subjectEl.value || "").trim();
-    previewCentreEl.textContent = centre || "Tutorial Centre";
-    previewTopicEl.textContent = subject || "Topic";
-
-    previewTagsEl.innerHTML = "";
-
-    previewDistroEl.innerHTML = "";
-    var distro = [
-      { label: "MC Basic", value: Number(mcBasicEl.value || 0) },
-      { label: "MC Intermediate", value: Number(mcInterEl.value || 0) },
-      { label: "MC Advanced", value: Number(mcAdvEl.value || 0) },
-      { label: "Long Basic", value: Number(longBasicEl.value || 0) },
-      { label: "Long Intermediate", value: Number(longInterEl.value || 0) },
-      { label: "Long Advanced", value: Number(longAdvEl.value || 0) },
-    ];
-    distro.forEach(function (d) {
-      var card = document.createElement("div");
-      card.className = "distro-item";
-      card.textContent = d.label + ": " + d.value;
-      previewDistroEl.appendChild(card);
-    });
-
-    var notes = (notesEl.value || "").trim();
-    previewNotesEl.textContent = notes ? "Notes: " + notes : "";
+    if (!paperPreviewEl) return;
+    
+    // 如果有生成的问题，显示预览
+    if (window.GeneratedQuestions && Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length > 0) {
+      var formData = collectForm();
+      var htmlContent = generateWorksheetHTML(window.GeneratedQuestions, {
+        centre: formData.centre,
+        topic: formData.subject
+      });
+      paperPreviewEl.innerHTML = htmlContent;
+      
+      // 触发 MathJax 重新渲染
+      if (hasMathJax() && MathJax.typesetPromise) {
+        MathJax.typesetPromise([paperPreviewEl]).catch(function(err) {
+          console.warn("MathJax rendering error:", err);
+        });
+      }
+    } else {
+      // 显示占位文本
+      var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+      var placeholderText = ui === "zh-hant" 
+        ? "<div style='text-align: center; padding: 40px; color: #999;'>點擊「生成工作紙」按鈕後，預覽將在此顯示</div>"
+        : "<div style='text-align: center; padding: 40px; color: #999;'>Preview will appear here after generating the worksheet</div>";
+      paperPreviewEl.innerHTML = placeholderText;
+    }
+    
     validateForm();
   }
 
@@ -72,18 +68,14 @@ document.addEventListener("DOMContentLoaded", function () {
   function handleLogoUpload(file) {
     if (!file) {
       logoPreviewEl.style.display = "none";
-      previewLogoEl.style.display = "none";
       logoPreviewEl.removeAttribute("src");
-      previewLogoEl.removeAttribute("src");
       return;
     }
     var reader = new FileReader();
     reader.onload = function (e) {
       var src = e.target.result;
       logoPreviewEl.src = src;
-      previewLogoEl.src = src;
       logoPreviewEl.style.display = "inline-block";
-      previewLogoEl.style.display = "inline-block";
     };
     reader.readAsDataURL(file);
   }
@@ -97,59 +89,6 @@ document.addEventListener("DOMContentLoaded", function () {
     statusBarEl.classList.add("hidden");
   }
 
-  function ensureJsPDF() {
-    return window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
-  }
-
-  function mmToPt(mm) {
-    return mm * 2.83465;
-  }
-
-  function drawHeader(doc, pageWidth, margin, centre, topic, logoDataUrl) {
-    var y = margin;
-    var logoSize = 36;
-    if (logoDataUrl) {
-      try { doc.addImage(logoDataUrl, "PNG", margin, y, logoSize, logoSize, "", "FAST"); } catch (e) {}
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    var xText = logoDataUrl ? margin + logoSize + 10 : margin;
-    doc.text(centre || "Tutorial Centre", xText, y + 16);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    var dateStr = new Date().toLocaleDateString();
-    doc.text((topic || "Topic") + " • " + dateStr, xText, y + 32);
-    return y + logoSize + 16;
-  }
-
-  function drawWatermark(doc, pageWidth, pageHeight, logoDataUrl) {
-    if (!logoDataUrl) return;
-    var centerX = pageWidth / 2;
-    var centerY = pageHeight / 2;
-    var size = Math.min(pageWidth, pageHeight) * 0.5;
-    if (doc.GState && doc.setGState) {
-      var gs = new doc.GState({ opacity: 0.08 });
-      doc.setGState(gs);
-      try { doc.addImage(logoDataUrl, "PNG", centerX - size / 2, centerY - size / 2, size, size, "", "FAST"); } catch (e) {}
-      doc.setGState(new doc.GState({ opacity: 1 }));
-    } else {
-      // Fallback: draw small less intrusive watermark at center
-      var fallbackSize = Math.min(pageWidth, pageHeight) * 0.25;
-      try { doc.addImage(logoDataUrl, "PNG", centerX - fallbackSize / 2, centerY - fallbackSize / 2, fallbackSize, fallbackSize, "", "FAST"); } catch (e) {}
-    }
-  }
-
-  function drawSectionTitle(doc, pageWidth, margin, y, title) {
-    var barHeight = 20;
-    doc.setFillColor(30, 64, 175);
-    doc.rect(margin, y, pageWidth - margin * 2, barHeight, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(title, margin + 10, y + 14);
-    doc.setTextColor(15, 23, 42);
-    return y + barHeight + 8;
-  }
 
   function applyUILanguage() {
     var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
@@ -178,45 +117,18 @@ document.addEventListener("DOMContentLoaded", function () {
     setText('label[for="apiKey"]', 'DeepSeek API Key', 'DeepSeek API 金鑰');
     var genBtn = document.getElementById('generateBtn');
     if (genBtn) genBtn.textContent = zh ? '生成工作紙' : 'Generate Worksheet';
-    var dlW = document.getElementById('downloadWorksheetBtn');
-    if (dlW) dlW.textContent = zh ? '下載工作紙 PDF' : 'Download Worksheet PDF';
-    var dlS = document.getElementById('downloadSolutionBtn');
-    if (dlS) dlS.textContent = zh ? '下載解答 PDF' : 'Download Solution PDF';
-    if (previewCentreEl) previewCentreEl.textContent = zh ? '補習中心' : (previewCentreEl.textContent || 'Tutorial Centre');
-    if (previewTopicEl) previewTopicEl.textContent = zh ? '主題' : (previewTopicEl.textContent || 'Topic');
+    var dlWPdf = document.getElementById('downloadWorksheetPdfBtn');
+    if (dlWPdf) dlWPdf.textContent = zh ? '下載 PDF (工作紙)' : 'Download PDF (Worksheet)';
+    var dlSPdf = document.getElementById('downloadSolutionPdfBtn');
+    if (dlSPdf) dlSPdf.textContent = zh ? '下載 PDF (解答)' : 'Download PDF (Solution)';
+    var dlWTex = document.getElementById('downloadWorksheetTexBtn');
+    if (dlWTex) dlWTex.textContent = zh ? '下載 .tex (工作紙)' : 'Download .tex (Worksheet)';
+    var dlSTex = document.getElementById('downloadSolutionTexBtn');
+    if (dlSTex) dlSTex.textContent = zh ? '下載 .tex (解答)' : 'Download .tex (Solution)';
+    var previewTitle = document.getElementById('previewTitle');
+    if (previewTitle) previewTitle.textContent = zh ? '預覽' : 'Preview';
   }
 
-  function addFooterAndPaging(doc, centre) {
-    var total = doc.getNumberOfPages();
-    var margin = mmToPt(20);
-    var pageWidth = doc.internal.pageSize.getWidth();
-    var pageHeight = doc.internal.pageSize.getHeight();
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    for (var i = 1; i <= total; i++) {
-      doc.setPage(i);
-      var footerY = pageHeight - margin / 2;
-      doc.setTextColor(51, 65, 85);
-      doc.text((centre || "Tutorial Centre") + " • Worksheet", margin, footerY);
-      var label = "Page " + i + " of " + total;
-      var textWidth = doc.getTextWidth(label);
-      doc.text(label, pageWidth - margin - textWidth, footerY);
-    }
-    doc.setTextColor(15, 23, 42);
-  }
-
-  function ensurePage(doc, y, bottomLimit, headerFn) {
-    if (y > bottomLimit) {
-      doc.addPage();
-      return headerFn();
-    }
-    return y;
-  }
-
-  function wrapText(doc, text, maxWidth) {
-    if (!text) return [];
-    try { return doc.splitTextToSize(String(text), maxWidth); } catch (e) { return [String(text)]; }
-  }
 
   function hasMathJax() {
     return typeof MathJax !== "undefined" && MathJax && MathJax.tex2svg;
@@ -258,17 +170,6 @@ document.addEventListener("DOMContentLoaded", function () {
     return await svgToPngDataUrl(svg, 2);
   }
 
-  function drawAnswerSpace(doc, margin, y, pageWidth, lines) {
-    var gap = 8;
-    var lineHeight = 14;
-    for (var i = 0; i < lines; i++) {
-      doc.setDrawColor(203, 213, 225);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += lineHeight;
-      y += gap / 2;
-    }
-    return y + 4;
-  }
 
   function groupByDifficulty(questions) {
     var groups = { Basic: [], Intermediate: [], Advanced: [] };
@@ -305,228 +206,6 @@ document.addEventListener("DOMContentLoaded", function () {
     return out;
   }
 
-  async function generateWorksheetPDF(questions, meta) {
-    var jsPDFCtor = ensureJsPDF();
-    if (!jsPDFCtor) {
-      showStatus("PDF library not loaded");
-      return;
-    }
-    var doc = new jsPDFCtor({ unit: "pt", format: "a4" });
-    doc.setFont("helvetica", "normal");
-    var pageWidth = doc.internal.pageSize.getWidth();
-    var pageHeight = doc.internal.pageSize.getHeight();
-    var margin = mmToPt(20);
-    var bottomLimit = pageHeight - mmToPt(25);
-
-    // Background watermark (first page)
-    drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-
-    // Header
-    var y = drawHeader(doc, pageWidth, margin, meta.centre, meta.topic, meta.logoDataUrl);
-    y += 6;
-
-    // Sections
-    var groups = groupByDifficulty(questions);
-    ["Basic", "Intermediate", "Advanced"].forEach(function (section) {
-      var list = groups[section] || [];
-      if (!list.length) return;
-      y = ensurePage(doc, y + 28, bottomLimit, function () {
-        drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-        return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic, meta.logoDataUrl) + 6;
-      });
-      y = drawSectionTitle(doc, pageWidth, margin, y, section);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-
-      for (var qi = 0; qi < list.length; qi++) {
-        var q = list[qi];
-        var numberLabel = (qi + 1) + ". ";
-        var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
-        var estimatedHeight = textLines.length * 14 + 60;
-        y = ensurePage(doc, y + estimatedHeight, bottomLimit, function () {
-          drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-          return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic, meta.logoDataUrl) + 6;
-        });
-        if (q._textImg) {
-          var imgW = pageWidth - margin * 2;
-          var imgH = 36;
-          try { doc.addImage(q._textImg, "PNG", margin, y, imgW, imgH, "", "FAST"); } catch (e) { doc.text(numberLabel + (textLines[0] || ""), margin, y); }
-          y += imgH + 6;
-        } else {
-          doc.text(numberLabel + (textLines[0] || ""), margin, y);
-          for (var k = 1; k < textLines.length; k++) {
-            doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
-          }
-          y += textLines.length * 14 + 6;
-        }
-
-        if (q.type === "MC" && Array.isArray(q.options)) {
-          var opts = q.options.slice(0, 4);
-          for (var oi = 0; oi < opts.length; oi++) {
-            var opt = opts[oi];
-            var line = String(opt || "");
-            var wrap = wrapText(doc, line, pageWidth - margin * 2 - 20);
-            if (q._optionImgs && q._optionImgs[oi]) {
-              var oW = pageWidth - margin * 2 - 20;
-              var oH = 24;
-              try { doc.addImage(q._optionImgs[oi], "PNG", margin + 16, y, oW, oH, "", "FAST"); } catch (e) {
-                wrap.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
-                y += wrap.length * 14 + 4;
-              }
-              y += oH + 4;
-            } else {
-              wrap.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
-              y += wrap.length * 14 + 4;
-            }
-          }
-          y = drawAnswerSpace(doc, margin, y + 2, pageWidth, 2);
-        } else {
-          y = drawAnswerSpace(doc, margin, y + 2, pageWidth, 6);
-        }
-        y += 6;
-      }
-    });
-
-    addFooterAndPaging(doc, meta.centre);
-    doc.save("Worksheet.pdf");
-  }
-  async function generateSolutionPDF(questions, meta) {
-    var jsPDFCtor = ensureJsPDF();
-    if (!jsPDFCtor) {
-      showStatus("PDF library not loaded");
-      return;
-    }
-    var doc = new jsPDFCtor({ unit: "pt", format: "a4" });
-    doc.setFont("helvetica", "normal");
-    var pageWidth = doc.internal.pageSize.getWidth();
-    var pageHeight = doc.internal.pageSize.getHeight();
-    var margin = mmToPt(20);
-    var bottomLimit = pageHeight - mmToPt(25);
-    drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-    var y = drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Solutions", meta.logoDataUrl);
-    y += 6;
-    var groups = groupByDifficulty(questions);
-    ["Basic", "Intermediate", "Advanced"].forEach(function (section) {
-      var list = groups[section] || [];
-      if (!list.length) return;
-      y = ensurePage(doc, y + 28, bottomLimit, function () {
-        drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-        return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Solutions", meta.logoDataUrl) + 6;
-      });
-      y = drawSectionTitle(doc, pageWidth, margin, y, section + " Solutions");
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      for (var qi = 0; qi < list.length; qi++) {
-        var q = list[qi];
-        var numberLabel = (qi + 1) + ". ";
-        var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
-        var extra = 0;
-        var mcLines = [];
-        var ansLines = [];
-        var solLines = [];
-        var tipsLines = [];
-        if (q.type === "MC") {
-          mcLines = (Array.isArray(q.options) ? q.options.slice(0, 4) : []).map(function (opt) { return String(opt || ""); });
-          ansLines = wrapText(doc, "Answer: " + String(q.answer || ""), pageWidth - margin * 2 - 20);
-          solLines = wrapText(doc, q.solution ? "Explanation: " + String(q.solution) : "Explanation: N/A", pageWidth - margin * 2 - 20);
-        } else {
-          solLines = wrapText(doc, q.solution ? "Solution: " + String(q.solution) : "Solution: N/A", pageWidth - margin * 2 - 20);
-        }
-        if (q.teacher_notes) {
-          tipsLines = wrapText(doc, "Teacher Tips: " + String(q.teacher_notes), pageWidth - margin * 2 - 20);
-        }
-        extra += textLines.length * 14 + solLines.length * 14 + tipsLines.length * 14 + 40;
-        if (mcLines.length) {
-          mcLines.forEach(function (opt) { extra += wrapText(doc, opt, pageWidth - margin * 2 - 20).length * 14 + 4; });
-          extra += ansLines.length * 14 + 8;
-        }
-        y = ensurePage(doc, y + extra, bottomLimit, function () {
-          drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-          return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Solutions", meta.logoDataUrl) + 6;
-        });
-        if (q._textImg) {
-          var imgW = pageWidth - margin * 2;
-          var imgH = 36;
-          try { doc.addImage(q._textImg, "PNG", margin, y, imgW, imgH, "", "FAST"); } catch (e) { doc.text(numberLabel + (textLines[0] || ""), margin, y); }
-          y += imgH + 6;
-        } else {
-          doc.text(numberLabel + (textLines[0] || ""), margin, y);
-          for (var k = 1; k < textLines.length; k++) {
-            doc.text(textLines[k], margin + doc.getTextWidth(numberLabel), y + k * 14);
-          }
-          y += textLines.length * 14 + 6;
-        }
-        if (mcLines.length) {
-          mcLines.forEach(function (opt) {
-            var wrap = wrapText(doc, opt, pageWidth - margin * 2 - 20);
-            wrap.forEach(function (wLine, wi) {
-              doc.text(wLine, margin + 16, y + wi * 14);
-            });
-            y += wrap.length * 14 + 4;
-          });
-          ansLines.forEach(function (wLine, wi) {
-            doc.text(wLine, margin + 16, y + wi * 14);
-          });
-          y += ansLines.length * 14 + 4;
-        }
-        if (q._solutionImg) {
-          var sW = pageWidth - margin * 2 - 20;
-          var sH = 42;
-          try { doc.addImage(q._solutionImg, "PNG", margin + 16, y, sW, sH, "", "FAST"); } catch (e) {
-            solLines.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
-            y += solLines.length * 14 + 4;
-          }
-          y += sH + 4;
-        } else {
-          solLines.forEach(function (wLine, wi) { doc.text(wLine, margin + 16, y + wi * 14); });
-          y += solLines.length * 14 + 4;
-        }
-        if (tipsLines.length) {
-          tipsLines.forEach(function (wLine, wi) {
-            doc.text(wLine, margin + 16, y + wi * 14);
-          });
-          y += tipsLines.length * 14 + 4;
-        }
-        if (q.marks != null) {
-          var markLine = "Marks: " + String(q.marks);
-          doc.text(markLine, margin + 16, y);
-          y += 16;
-        }
-        y += 6;
-      }
-    });
-    doc.addPage();
-    drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-    y = drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Answer Key", meta.logoDataUrl);
-    y += 6;
-    y = drawSectionTitle(doc, pageWidth, margin, y, "Answer Key");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    var groupsKey = groupByDifficulty(questions);
-    ["Basic", "Intermediate", "Advanced"].forEach(function (section) {
-      var list = groupsKey[section] || [];
-      if (!list.length) return;
-      y = ensurePage(doc, y + 28, bottomLimit, function () {
-        drawWatermark(doc, pageWidth, pageHeight, meta.logoDataUrl);
-        return drawHeader(doc, pageWidth, margin, meta.centre, meta.topic + " • Answer Key", meta.logoDataUrl) + 6;
-      });
-      doc.setFont("helvetica", "bold");
-      doc.text(section, margin, y);
-      doc.setFont("helvetica", "normal");
-      y += 18;
-      list.forEach(function (q, idx) {
-        var label = section + " " + (idx + 1) + ": ";
-        var line = q.type === "MC" ? "Answer " + String(q.answer || "N/A") : "See solution";
-        var wrap = wrapText(doc, label + line, pageWidth - margin * 2 - 20);
-        wrap.forEach(function (wLine, wi) {
-          doc.text(wLine, margin, y + wi * 14);
-        });
-        y += wrap.length * 14 + 6;
-      });
-    });
-    addFooterAndPaging(doc, meta.centre);
-    doc.save("Solution.pdf");
-  }
 
   function safeTex(s) {
     if (!s) return "";
@@ -617,6 +296,231 @@ document.addEventListener("DOMContentLoaded", function () {
     a.click();
     document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+  }
+
+  // 将文本中的 LaTeX 公式转换为 HTML（保持 $...$ 格式，MathJax 已配置支持）
+  function textToHtml(text) {
+    if (!text) return "";
+    var str = String(text);
+    // 转义 HTML 特殊字符（但保留 $ 符号供 MathJax 使用）
+    var parts = str.split(/(\$[^$]+\$)/g);
+    return parts.map(function(part) {
+      if (part.startsWith("$") && part.endsWith("$")) {
+        // 这是 LaTeX 公式，保持原样（MathJax 会处理）
+        return part;
+      }
+      // 转义普通文本
+      var div = document.createElement("div");
+      div.textContent = part;
+      return div.innerHTML;
+    }).join("");
+  }
+
+  // 生成工作表的 HTML 内容
+  function generateWorksheetHTML(questions, meta) {
+    var html = [];
+    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; font-size: 14px; line-height: 1.6;" class="worksheet-content">');
+    
+    // 标题
+    html.push('<div style="text-align: center; margin-bottom: 30px;">');
+    html.push('<h1 style="font-size: 24px; font-weight: bold; margin: 0;">' + escapeHtml(meta.topic || "Worksheet") + '</h1>');
+    html.push('<p style="margin: 10px 0 0 0; color: #666;">' + escapeHtml(meta.centre || "Tutorial Centre") + '</p>');
+    html.push('</div>');
+
+    var groups = groupByDifficulty(questions);
+    var sectionLabels = { "Basic": "基礎", "Intermediate": "中級", "Advanced": "高級" };
+    
+    ["Basic", "Intermediate", "Advanced"].forEach(function(level) {
+      var list = groups[level] || [];
+      if (!list.length) return;
+      
+      html.push('<div style="margin: 30px 0;">');
+      html.push('<h2 style="font-size: 18px; font-weight: bold; background: #1e40af; color: white; padding: 10px; margin: 0 0 15px 0;">' + 
+                (sectionLabels[level] || level) + '</h2>');
+      html.push('<ol style="margin: 0; padding-left: 25px;">');
+      
+      list.forEach(function(q, idx) {
+        html.push('<li style="margin-bottom: 20px;">');
+        html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
+        
+        if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
+          html.push('<ul style="list-style-type: none; padding-left: 20px; margin: 10px 0;">');
+          q.options.forEach(function(opt) {
+            html.push('<li style="margin: 5px 0;">' + textToHtml(opt) + '</li>');
+          });
+          html.push('</ul>');
+        }
+        
+        // 答题空间
+        if (q.type === "Long") {
+          html.push('<div style="margin-top: 15px; min-height: 150px; border-top: 1px solid #ddd; padding-top: 10px;"></div>');
+        } else {
+          html.push('<div style="margin-top: 10px; min-height: 40px; border-top: 1px solid #ddd; padding-top: 5px;"></div>');
+        }
+        
+        html.push('</li>');
+      });
+      
+      html.push('</ol>');
+      html.push('</div>');
+    });
+    
+    html.push('</div>');
+    return html.join("");
+  }
+
+  // 生成解答的 HTML 内容
+  function generateSolutionHTML(questions, meta) {
+    var html = [];
+    html.push('<div style="font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; font-size: 14px; line-height: 1.6;" class="solution-content">');
+    
+    // 标题
+    html.push('<div style="text-align: center; margin-bottom: 30px;">');
+    html.push('<h1 style="font-size: 24px; font-weight: bold; margin: 0;">' + escapeHtml(meta.topic || "Solution") + ' - 解答</h1>');
+    html.push('<p style="margin: 10px 0 0 0; color: #666;">' + escapeHtml(meta.centre || "Tutorial Centre") + '</p>');
+    html.push('</div>');
+
+    var groups = groupByDifficulty(questions);
+    var sectionLabels = { "Basic": "基礎", "Intermediate": "中級", "Advanced": "高級" };
+    
+    ["Basic", "Intermediate", "Advanced"].forEach(function(level) {
+      var list = groups[level] || [];
+      if (!list.length) return;
+      
+      html.push('<div style="margin: 30px 0;">');
+      html.push('<h2 style="font-size: 18px; font-weight: bold; background: #1e40af; color: white; padding: 10px; margin: 0 0 15px 0;">' + 
+                (sectionLabels[level] || level) + ' 解答</h2>');
+      html.push('<ol style="margin: 0; padding-left: 25px;">');
+      
+      list.forEach(function(q, idx) {
+        html.push('<li style="margin-bottom: 25px;">');
+        html.push('<div style="margin-bottom: 8px;">' + textToHtml(q.text) + '</div>');
+        
+        if (q.type === "MC" && Array.isArray(q.options) && q.options.length > 0) {
+          html.push('<ul style="list-style-type: none; padding-left: 20px; margin: 10px 0;">');
+          q.options.forEach(function(opt) {
+            html.push('<li style="margin: 5px 0;">' + textToHtml(opt) + '</li>');
+          });
+          html.push('</ul>');
+        }
+        
+        // 答案和解答
+        html.push('<div style="margin-top: 15px; padding: 10px; background: #f0f9ff; border-left: 4px solid #1e40af;">');
+        if (q.type === "MC") {
+          html.push('<p style="margin: 5px 0;"><strong>答案：</strong>' + escapeHtml(q.answer || "N/A") + '</p>');
+        }
+        if (q.solution) {
+          html.push('<p style="margin: 5px 0;"><strong>解答：</strong>' + textToHtml(q.solution) + '</p>');
+        }
+        if (q.marks != null) {
+          html.push('<p style="margin: 5px 0;"><strong>分數：</strong>' + escapeHtml(String(q.marks)) + '</p>');
+        }
+        html.push('</div>');
+        
+        html.push('</li>');
+      });
+      
+      html.push('</ol>');
+      html.push('</div>');
+    });
+    
+    html.push('</div>');
+    return html.join("");
+  }
+
+  function escapeHtml(text) {
+    if (!text) return "";
+    var div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+
+  // 生成 PDF
+  async function generatePDF(questions, meta, isSolution) {
+    if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
+      alert("PDF library not loaded. Please refresh the page.");
+      return;
+    }
+    if (typeof html2canvas === "undefined") {
+      alert("html2canvas library not loaded. Please refresh the page.");
+      return;
+    }
+
+    showStatus(isSolution ? "Generating solution PDF..." : "Generating worksheet PDF...");
+    
+    try {
+      // 创建临时容器
+      var container = document.createElement("div");
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.width = "800px";
+      container.style.backgroundColor = "#ffffff";
+      var htmlContent = isSolution ? generateSolutionHTML(questions, meta) : generateWorksheetHTML(questions, meta);
+      container.innerHTML = htmlContent;
+      document.body.appendChild(container);
+
+      // 配置 MathJax 以自动渲染
+      if (hasMathJax() && MathJax.typesetPromise) {
+        try {
+          await MathJax.typesetPromise([container]);
+        } catch (e) {
+          console.warn("MathJax rendering error:", e);
+        }
+      }
+      
+      // 额外等待确保渲染完成
+      await new Promise(function(resolve) { setTimeout(resolve, 500); });
+
+      // 使用 html2canvas 转换为 canvas
+      var canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: 800,
+        windowWidth: 800
+      });
+
+      // 创建 PDF
+      var jsPDF = window.jspdf.jsPDF;
+      var pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      var imgData = canvas.toDataURL("image/png");
+      var imgWidth = 210; // A4 width in mm
+      var pageHeight = 297; // A4 height in mm
+      var imgHeight = (canvas.height * imgWidth) / canvas.width;
+      var heightLeft = imgHeight;
+      var position = 0;
+
+      // 添加第一页
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // 如果需要多页
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // 清理
+      document.body.removeChild(container);
+
+      // 保存
+      var filename = isSolution ? "Solution.pdf" : "Worksheet.pdf";
+      pdf.save(filename);
+      
+      hideStatus();
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      alert("Error generating PDF: " + error.message);
+      hideStatus();
+    }
   }
 
   function localGenerateQuestions(formData, lang) {
@@ -828,8 +732,8 @@ document.addEventListener("DOMContentLoaded", function () {
     var apiKey = getApiKey();
     // Disable actions during generation
     generateBtn.disabled = true;
-    downloadWorksheetBtn.disabled = true;
-    downloadSolutionBtn.disabled = true;
+    downloadWorksheetPdfBtn.disabled = true;
+    downloadSolutionPdfBtn.disabled = true;
     downloadWorksheetTexBtn.disabled = true;
     downloadSolutionTexBtn.disabled = true;
     if (!apiKey) {
@@ -842,11 +746,11 @@ document.addEventListener("DOMContentLoaded", function () {
       buildTeXAssets(window.GeneratedQuestions).then(function () {
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-        downloadWorksheetBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = false;
         downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-          downloadSolutionBtn.disabled = false;
+          downloadSolutionPdfBtn.disabled = false;
           downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
@@ -884,12 +788,13 @@ document.addEventListener("DOMContentLoaded", function () {
           completeBarEl.classList.remove("hidden");
         }
         return buildTeXAssets(window.GeneratedQuestions).then(function () {
+          updatePreview(); // Update preview after questions are generated
           statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-          downloadWorksheetBtn.disabled = false;
+          downloadWorksheetPdfBtn.disabled = false;
           downloadWorksheetTexBtn.disabled = false;
           setTimeout(function () {
             statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-            downloadSolutionBtn.disabled = false;
+            downloadSolutionPdfBtn.disabled = false;
             downloadSolutionTexBtn.disabled = false;
           }, 400);
         }).finally(function () {
@@ -912,12 +817,13 @@ document.addEventListener("DOMContentLoaded", function () {
         completeBarEl.classList.remove("hidden");
       }
       buildTeXAssets(window.GeneratedQuestions).then(function () {
+        updatePreview(); // Update preview after questions are generated
         statusTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-        downloadWorksheetBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = false;
         downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-          downloadSolutionBtn.disabled = false;
+          downloadSolutionPdfBtn.disabled = false;
           downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
@@ -934,12 +840,13 @@ document.addEventListener("DOMContentLoaded", function () {
         completeBarEl.classList.remove("hidden");
       }
       buildTeXAssets(window.GeneratedQuestions).then(function () {
+        updatePreview(); // Update preview after questions are generated
         statusTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
-        downloadWorksheetBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = false;
         downloadWorksheetTexBtn.disabled = false;
         setTimeout(function () {
           statusTextEl.textContent = ui3 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
-          downloadSolutionBtn.disabled = false;
+          downloadSolutionPdfBtn.disabled = false;
           downloadSolutionTexBtn.disabled = false;
         }, 400);
       }).finally(function () {
@@ -968,38 +875,35 @@ document.addEventListener("DOMContentLoaded", function () {
   generateBtn.addEventListener("click", function () {
     if (generateBtn.disabled) return;
     // Disable downloads immediately
-    downloadWorksheetBtn.disabled = true;
-    downloadSolutionBtn.disabled = true;
+    downloadWorksheetPdfBtn.disabled = true;
+    downloadSolutionPdfBtn.disabled = true;
     downloadWorksheetTexBtn.disabled = true;
     downloadSolutionTexBtn.disabled = true;
     generateWithDeepSeek();
   });
 
-  downloadWorksheetBtn.addEventListener("click", async function () {
+  downloadWorksheetPdfBtn.addEventListener("click", async function () {
     var formData = collectForm();
     var lang = detectLanguage(formData.subject + " " + formData.notes);
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
       : localGenerateQuestions(formData, lang);
-    await buildTeXAssets(questions);
-    await generateWorksheetPDF(questions, {
+    await generatePDF(questions, {
       centre: formData.centre,
-      topic: formData.subject,
-      logoDataUrl: previewLogoEl && previewLogoEl.src ? previewLogoEl.src : null
-    });
+      topic: formData.subject
+    }, false);
   });
-  downloadSolutionBtn.addEventListener("click", async function () {
+
+  downloadSolutionPdfBtn.addEventListener("click", async function () {
     var formData = collectForm();
     var lang = detectLanguage(formData.subject + " " + formData.notes);
     var questions = Array.isArray(window.GeneratedQuestions) && window.GeneratedQuestions.length
       ? window.GeneratedQuestions
       : localGenerateQuestions(formData, lang);
-    await buildTeXAssets(questions);
-    await generateSolutionPDF(questions, {
+    await generatePDF(questions, {
       centre: formData.centre,
-      topic: formData.subject,
-      logoDataUrl: previewLogoEl && previewLogoEl.src ? previewLogoEl.src : null
-    });
+      topic: formData.subject
+    }, true);
   });
 
   downloadWorksheetTexBtn.addEventListener("click", function () {
@@ -1031,7 +935,4 @@ document.addEventListener("DOMContentLoaded", function () {
   updateYear();
   updatePreview();
   applyUILanguage();
-  // Initially disable until generation happens
-  downloadWorksheetBtn.disabled = true;
-  downloadSolutionBtn.disabled = true;
 });

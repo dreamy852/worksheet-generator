@@ -5,8 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Worksheet Generator</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      }
+    };
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -17,8 +26,8 @@
       </div>
       <div style="display:flex; gap:10px; align-items:center;">
         <button id="generateBtn" class="btn btn-primary" type="button">Generate Worksheet</button>
-        <button id="downloadWorksheetBtn" class="btn" type="button" disabled>Download Worksheet PDF</button>
-        <button id="downloadSolutionBtn" class="btn" type="button" disabled>Download Solution PDF</button>
+        <button id="downloadWorksheetPdfBtn" class="btn" type="button" disabled>Download PDF (Worksheet)</button>
+        <button id="downloadSolutionPdfBtn" class="btn" type="button" disabled>Download PDF (Solution)</button>
         <button id="downloadWorksheetTexBtn" class="btn" type="button" disabled>Download .tex (Worksheet)</button>
         <button id="downloadSolutionTexBtn" class="btn" type="button" disabled>Download .tex (Solution)</button>
       </div>
@@ -117,19 +126,10 @@
 
     <aside class="card preview-card">
       <div class="preview-header">
-        <div class="preview-logo">
-          <img id="previewLogo" alt="">
-        </div>
-        <div class="preview-meta">
-          <div class="preview-centre" id="previewCentre">Tutorial Centre</div>
-          <div class="preview-topic" id="previewTopic">Topic</div>
-        </div>
+        <h2 class="preview-title" id="previewTitle">Preview</h2>
       </div>
-
       <div class="preview-body">
-        <div class="preview-tags" id="previewTags"></div>
-        <div class="preview-distro" id="previewDistro"></div>
-        <div class="preview-notes" id="previewNotes"></div>
+        <div id="paperPreview" class="paper-preview"></div>
       </div>
     </aside>
   </main>

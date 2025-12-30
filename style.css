@@ -207,82 +207,65 @@ textarea {
 }
 
 .preview-header {
-  display: grid;
-  grid-template-columns: 80px 1fr;
-  gap: 16px;
-  align-items: center;
   padding: 16px;
   background: linear-gradient(90deg, var(--blue-700), #2b55ce);
   color: var(--white);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
-.preview-logo img {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 10px;
-  border: 2px solid rgba(255,255,255,0.6);
-  display: none;
-}
-
-.preview-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.preview-centre {
+.preview-title {
+  margin: 0;
+  font-size: 18px;
   font-weight: 600;
-  font-size: 16px;
-}
-
-.preview-topic {
-  font-size: 14px;
-  opacity: 0.9;
 }
 
 .preview-body {
-  padding: 16px;
+  padding: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 
-.preview-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+.paper-preview {
+  font-family: Arial, "Microsoft JhengHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 20px;
+  background: #ffffff;
 }
 
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--gray-100);
-  color: var(--text-700);
-  font-size: 12px;
-}
-
-.preview-distro {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.distro-item {
-  background: var(--gray-100);
-  border-radius: 12px;
-  padding: 10px;
+.paper-preview h1 {
+  font-size: 20px;
+  font-weight: bold;
   text-align: center;
-  font-size: 13px;
+  margin: 0 0 20px 0;
 }
 
-.preview-notes {
-  border-top: 1px solid var(--gray-100);
-  padding-top: 12px;
-  color: var(--text-700);
-  font-size: 13px;
+.paper-preview h2 {
+  font-size: 16px;
+  font-weight: bold;
+  background: #1e40af;
+  color: white;
+  padding: 8px 12px;
+  margin: 20px 0 12px 0;
+}
+
+.paper-preview ol {
+  margin: 0;
+  padding-left: 25px;
+}
+
+.paper-preview li {
+  margin-bottom: 16px;
+}
+
+.paper-preview ul {
+  list-style-type: none;
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.paper-preview ul li {
+  margin: 4px 0;
 }
 
 .btn {
