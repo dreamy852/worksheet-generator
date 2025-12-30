@@ -55,37 +55,46 @@
 
         <div class="divider"></div>
 
-        <h3 class="subsection-title">Question Types</h3>
-        <div class="form-row">
-          <label class="checkbox">
-            <input type="checkbox" id="qtMC" name="questionTypes" value="MC" checked>
-            <span>Multiple Choice (MC)</span>
-          </label>
-          <label class="checkbox">
-            <input type="checkbox" id="qtLong" name="questionTypes" value="Long">
-            <span>Long Answer Questions</span>
-          </label>
-        </div>
-
-        <h3 class="subsection-title">Difficulty Distribution</h3>
+        <h3 class="subsection-title">Question Distribution</h3>
         <div class="form-grid thirds">
           <div class="form-field">
-            <label for="basicCount">Basic Questions</label>
-            <input id="basicCount" name="basicCount" type="number" min="0" step="1" value="5">
+            <label for="mcBasicCount">MC Basic</label>
+            <input id="mcBasicCount" name="mcBasicCount" type="number" min="0" step="1" value="5">
           </div>
           <div class="form-field">
-            <label for="intermediateCount">Intermediate Questions</label>
-            <input id="intermediateCount" name="intermediateCount" type="number" min="0" step="1" value="5">
+            <label for="mcIntermediateCount">MC Intermediate</label>
+            <input id="mcIntermediateCount" name="mcIntermediateCount" type="number" min="0" step="1" value="5">
           </div>
           <div class="form-field">
-            <label for="advancedCount">Advanced Questions</label>
-            <input id="advancedCount" name="advancedCount" type="number" min="0" step="1" value="5">
+            <label for="mcAdvancedCount">MC Advanced</label>
+            <input id="mcAdvancedCount" name="mcAdvancedCount" type="number" min="0" step="1" value="5">
+          </div>
+          <div class="form-field">
+            <label for="longBasicCount">Long question Basic</label>
+            <input id="longBasicCount" name="longBasicCount" type="number" min="0" step="1" value="5">
+          </div>
+          <div class="form-field">
+            <label for="longIntermediateCount">Long question Intermediate</label>
+            <input id="longIntermediateCount" name="longIntermediateCount" type="number" min="0" step="1" value="5">
+          </div>
+          <div class="form-field">
+            <label for="longAdvancedCount">Long question Advanced</label>
+            <input id="longAdvancedCount" name="longAdvancedCount" type="number" min="0" step="1" value="5">
           </div>
         </div>
 
         <div class="form-field">
           <label for="notes">Additional Notes</label>
           <textarea id="notes" name="notes" rows="4" placeholder="Special instructions or constraints"></textarea>
+        </div>
+
+        <h3 class="subsection-title">Interface Language</h3>
+        <div class="form-field">
+          <label for="uiLang">Language</label>
+          <select id="uiLang" name="uiLang">
+            <option value="en" selected>English</option>
+            <option value="zh-hant">繁體中文</option>
+          </select>
         </div>
 
         <h3 class="subsection-title">API Settings</h3>
@@ -98,6 +107,9 @@
       <div id="statusBar" class="status hidden">
         <div class="spinner"></div>
         <span id="statusText">Preparing...</span>
+      </div>
+      <div id="completeBar" class="status hidden">
+        <span id="completeText">Worksheet generation is completed!</span>
       </div>
     </section>
 

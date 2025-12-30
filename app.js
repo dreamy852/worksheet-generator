@@ -6,13 +6,15 @@ document.addEventListener("DOMContentLoaded", function () {
   var logoEl = document.getElementById("logo");
   var logoPreviewEl = document.getElementById("logoPreview");
   var previewLogoEl = document.getElementById("previewLogo");
-  var mcEl = document.getElementById("qtMC");
-  var longEl = document.getElementById("qtLong");
-  var basicEl = document.getElementById("basicCount");
-  var interEl = document.getElementById("intermediateCount");
-  var advEl = document.getElementById("advancedCount");
+  var mcBasicEl = document.getElementById("mcBasicCount");
+  var mcInterEl = document.getElementById("mcIntermediateCount");
+  var mcAdvEl = document.getElementById("mcAdvancedCount");
+  var longBasicEl = document.getElementById("longBasicCount");
+  var longInterEl = document.getElementById("longIntermediateCount");
+  var longAdvEl = document.getElementById("longAdvancedCount");
   var notesEl = document.getElementById("notes");
   var apiKeyEl = document.getElementById("apiKey");
+  var uiLangEl = document.getElementById("uiLang");
   var previewCentreEl = document.getElementById("previewCentre");
   var previewTopicEl = document.getElementById("previewTopic");
   var previewTagsEl = document.getElementById("previewTags");
@@ -20,6 +22,8 @@ document.addEventListener("DOMContentLoaded", function () {
   var previewNotesEl = document.getElementById("previewNotes");
   var statusBarEl = document.getElementById("statusBar");
   var statusTextEl = document.getElementById("statusText");
+  var completeBarEl = document.getElementById("completeBar");
+  var completeTextEl = document.getElementById("completeText");
   var generateBtn = document.getElementById("generateBtn");
   var downloadWorksheetBtn = document.getElementById("downloadWorksheetBtn");
   var downloadSolutionBtn = document.getElementById("downloadSolutionBtn");
@@ -34,22 +38,16 @@ document.addEventListener("DOMContentLoaded", function () {
     previewCentreEl.textContent = centre || "Tutorial Centre";
     previewTopicEl.textContent = subject || "Topic";
 
-    var tags = [];
-    if (mcEl.checked) tags.push("Multiple Choice");
-    if (longEl.checked) tags.push("Long Answer");
     previewTagsEl.innerHTML = "";
-    tags.forEach(function (t) {
-      var chip = document.createElement("span");
-      chip.className = "tag";
-      chip.textContent = t;
-      previewTagsEl.appendChild(chip);
-    });
 
     previewDistroEl.innerHTML = "";
     var distro = [
-      { label: "Basic", value: Number(basicEl.value || 0) },
-      { label: "Intermediate", value: Number(interEl.value || 0) },
-      { label: "Advanced", value: Number(advEl.value || 0) }
+      { label: "MC Basic", value: Number(mcBasicEl.value || 0) },
+      { label: "MC Intermediate", value: Number(mcInterEl.value || 0) },
+      { label: "MC Advanced", value: Number(mcAdvEl.value || 0) },
+      { label: "Long Basic", value: Number(longBasicEl.value || 0) },
+      { label: "Long Intermediate", value: Number(longInterEl.value || 0) },
+      { label: "Long Advanced", value: Number(longAdvEl.value || 0) },
     ];
     distro.forEach(function (d) {
       var card = document.createElement("div");
@@ -66,8 +64,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function validateForm() {
     var hasSubject = subjectEl.value.trim().length > 0;
     var hasCentre = centreEl.value.trim().length > 0;
-    var hasType = mcEl.checked || longEl.checked;
-    generateBtn.disabled = !(hasSubject && hasCentre && hasType);
+    generateBtn.disabled = !(hasSubject && hasCentre);
   }
 
   function handleLogoUpload(file) {
@@ -150,6 +147,37 @@ document.addEventListener("DOMContentLoaded", function () {
     doc.text(title, margin + 10, y + 14);
     doc.setTextColor(15, 23, 42);
     return y + barHeight + 8;
+  }
+
+  function applyUILanguage() {
+    var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+    var zh = ui === "zh-hant";
+    function setText(selector, textEn, textZh) {
+      var el = document.querySelector(selector);
+      if (el) el.textContent = zh ? textZh : textEn;
+    }
+    setText('label[for="subject"]', 'Topic/Subject', '主題/科目');
+    setText('label[for="centreName"]', 'Tutorial Centre Name', '補習中心名稱');
+    setText('label[for="logo"]', 'Logo Upload', '上載標誌');
+    setText('.section-title', 'Worksheet Setup', '工作紙設定');
+    setText('.subsection-title', 'Question Distribution', '題型分配');
+    setText('label[for="mcBasicCount"]', 'MC Basic', '選擇題 基礎');
+    setText('label[for="mcIntermediateCount"]', 'MC Intermediate', '選擇題 中級');
+    setText('label[for="mcAdvancedCount"]', 'MC Advanced', '選擇題 高級');
+    setText('label[for="longBasicCount"]', 'Long question Basic', '長答題 基礎');
+    setText('label[for="longIntermediateCount"]', 'Long question Intermediate', '長答題 中級');
+    setText('label[for="longAdvancedCount"]', 'Long question Advanced', '長答題 高級');
+    setText('label[for="notes"]', 'Additional Notes', '附加說明');
+    setText('label[for="uiLang"]', 'Language', '介面語言');
+    setText('label[for="apiKey"]', 'DeepSeek API Key', 'DeepSeek API 金鑰');
+    var genBtn = document.getElementById('generateBtn');
+    if (genBtn) genBtn.textContent = zh ? '生成工作紙' : 'Generate Worksheet';
+    var dlW = document.getElementById('downloadWorksheetBtn');
+    if (dlW) dlW.textContent = zh ? '下載工作紙 PDF' : 'Download Worksheet PDF';
+    var dlS = document.getElementById('downloadSolutionBtn');
+    if (dlS) dlS.textContent = zh ? '下載解答 PDF' : 'Download Solution PDF';
+    if (previewCentreEl) previewCentreEl.textContent = zh ? '補習中心' : (previewCentreEl.textContent || 'Tutorial Centre');
+    if (previewTopicEl) previewTopicEl.textContent = zh ? '主題' : (previewTopicEl.textContent || 'Topic');
   }
 
   function addFooterAndPaging(doc, centre) {
@@ -265,23 +293,9 @@ document.addEventListener("DOMContentLoaded", function () {
         });
       }
     }
-    var types = formData.types;
     var counts = formData.counts;
-    ["basic", "intermediate", "advanced"].forEach(function (levelKey, idxLevel) {
-      var diffName = ["Basic", "Intermediate", "Advanced"][idxLevel];
-      var c = Number(counts[levelKey] || 0);
-      if (!c) return;
-      if (types.mc && types.long) {
-        var a = Math.floor(c / 2);
-        var b = c - a;
-        add(a, diffName, "MC");
-        add(b, diffName, "Long");
-      } else if (types.mc) {
-        add(c, diffName, "MC");
-      } else if (types.long) {
-        add(c, diffName, "Long");
-      }
-    });
+    [["Basic", counts.mcBasic], ["Intermediate", counts.mcIntermediate], ["Advanced", counts.mcAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "MC"); });
+    [["Basic", counts.longBasic], ["Intermediate", counts.longIntermediate], ["Advanced", counts.longAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "Long"); });
     return out;
   }
 
@@ -532,35 +546,39 @@ document.addEventListener("DOMContentLoaded", function () {
           solution: solution,
           solutionTeX: type === "Long" ? solTex : "",
           marks: type === "Long" ? 6 : 2,
-          teacher_notes: lang === "zh" ? "提示：注意基础因式分解与定积分基础。" : "Tip: Emphasize factoring basics and definite integral evaluation."
+          teacher_notes: lang === "zh" ? "提示：注意基礎因式分解與定積分基礎。" : "Tip: Emphasize factoring basics and definite integral evaluation."
         });
       }
     }
-    var types = formData.types;
     var counts = formData.counts;
-    ["basic", "intermediate", "advanced"].forEach(function (levelKey, idxLevel) {
-      var diffName = ["Basic", "Intermediate", "Advanced"][idxLevel];
-      var c = Number(counts[levelKey] || 0);
-      if (!c) return;
-      if (types.mc && types.long) {
-        var a = Math.floor(c / 2);
-        var b = c - a;
-        add(a, diffName, "MC");
-        add(b, diffName, "Long");
-      } else if (types.mc) {
-        add(c, diffName, "MC");
-      } else if (types.long) {
-        add(c, diffName, "Long");
-      }
-    });
+    [["Basic", counts.mcBasic], ["Intermediate", counts.mcIntermediate], ["Advanced", counts.mcAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "MC"); });
+    [["Basic", counts.longBasic], ["Intermediate", counts.longIntermediate], ["Advanced", counts.longAdvanced]].forEach(function (pair) { add(pair[1], pair[0], "Long"); });
     return out;
   }
 
   async function buildTeXAssets(questions) {
+    async function ensureReady() {
+      var tries = 0;
+      while (!hasMathJax() && tries < 50) {
+        await new Promise(function (r) { setTimeout(r, 100); });
+        tries++;
+      }
+      try {
+        if (MathJax && MathJax.startup && MathJax.startup.promise) {
+          await MathJax.startup.promise;
+        }
+      } catch (e) {}
+    }
+    await ensureReady();
+    function extractFirstTeX(s) {
+      var m = s.match(/\$([^$]+)\$/) || s.match(/\\\(([^)]+)\\\)/) || s.match(/\\\[([\s\S]+?)\\\]/);
+      return m ? m[1] : null;
+    }
     for (var i = 0; i < questions.length; i++) {
       var q = questions[i];
-      if (q.textTeX) {
-        try { q._textImg = await texToPng(q.textTeX); } catch (e) {}
+      var textTex = q.textTeX || (typeof q.text === "string" ? extractFirstTeX(q.text) : null);
+      if (textTex) {
+        try { q._textImg = await texToPng(textTex); } catch (e) {}
       }
       if (Array.isArray(q.options)) {
         q._optionImgs = [];
@@ -577,8 +595,9 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         }
       }
-      if (q.solutionTeX) {
-        try { q._solutionImg = await texToPng(q.solutionTeX); } catch (e) {}
+      var solutionTex = q.solutionTeX || (typeof q.solution === "string" ? extractFirstTeX(q.solution) : null);
+      if (solutionTex) {
+        try { q._solutionImg = await texToPng(solutionTex); } catch (e) {}
       }
     }
     return questions;
@@ -593,28 +612,23 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function detectLanguage(text) {
+    var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+    if (ui === "zh-hant") return "zh";
     var t = String(text || "");
     if (/[\u4e00-\u9fff]/.test(t)) return "zh";
-    if (/Chinese/i.test(t)) return "zh";
+    if (/Chinese|繁體中文|中文/i.test(t)) return "zh";
     return "en";
   }
 
-  function buildPlan(types, counts) {
-    var selected = [];
-    if (types.mc) selected.push("MC");
-    if (types.long) selected.push("Long");
+  function buildPlan(counts) {
     var plan = [];
-    ["Basic", "Intermediate", "Advanced"].forEach(function (level) {
-      var c = Number(counts[level.toLowerCase()] || 0);
-      if (!c) return;
-      if (selected.length === 1) {
-        plan.push({ difficulty: level, type: selected[0], count: c });
-      } else if (selected.length === 2) {
-        var a = Math.floor(c / 2);
-        var b = c - a;
-        plan.push({ difficulty: level, type: "MC", count: a });
-        plan.push({ difficulty: level, type: "Long", count: b });
-      }
+    [["Basic","mcBasic"],["Intermediate","mcIntermediate"],["Advanced","mcAdvanced"]].forEach(function(pair){
+      var level = pair[0]; var key = pair[1];
+      var c = Number(counts[key] || 0); if (c>0) plan.push({ difficulty: level, type: "MC", count: c });
+    });
+    [["Basic","longBasic"],["Intermediate","longIntermediate"],["Advanced","longAdvanced"]].forEach(function(pair){
+      var level = pair[0]; var key = pair[1];
+      var c = Number(counts[key] || 0); if (c>0) plan.push({ difficulty: level, type: "Long", count: c });
     });
     return plan;
   }
@@ -622,7 +636,12 @@ document.addEventListener("DOMContentLoaded", function () {
   function buildPrompt(subject, topic, notes, language, plan) {
     var lines = [];
     lines.push("Role: Expert education content writer.");
-    lines.push("Language: " + (language === "zh" ? "Chinese" : "English") + ".");
+    var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+    if (language === "zh") {
+      lines.push("Language: Traditional Chinese (繁體中文).");
+    } else {
+      lines.push("Language: English.");
+    }
     lines.push("Subject: " + (subject || "General") + ".");
     lines.push("Topic: " + (topic || subject || "General") + ".");
     if (notes && notes.trim()) lines.push("Constraints: " + notes.trim() + ".");
@@ -696,11 +715,13 @@ document.addEventListener("DOMContentLoaded", function () {
     return {
       subject: subjectEl.value || "",
       centre: centreEl.value || "",
-      types: { mc: mcEl.checked, long: longEl.checked },
       counts: {
-        basic: Number(basicEl.value || 0),
-        intermediate: Number(interEl.value || 0),
-        advanced: Number(advEl.value || 0)
+        mcBasic: Number(mcBasicEl.value || 0),
+        mcIntermediate: Number(mcInterEl.value || 0),
+        mcAdvanced: Number(mcAdvEl.value || 0),
+        longBasic: Number(longBasicEl.value || 0),
+        longIntermediate: Number(longInterEl.value || 0),
+        longAdvanced: Number(longAdvEl.value || 0)
       },
       notes: notesEl.value || ""
     };
@@ -714,12 +735,17 @@ document.addEventListener("DOMContentLoaded", function () {
       var localQsNoKey = localGenerateQuestions(formDataNoKey, langNoKey);
       window.GeneratedQuestions = localQsNoKey;
       statusTextEl.textContent = "Generated " + localQsNoKey.length + " local questions";
+      var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+      if (completeBarEl && completeTextEl) {
+        completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
+        completeBarEl.classList.remove("hidden");
+      }
       setTimeout(hideStatus, 1200);
       return;
     }
     var formData = collectForm();
     var lang = detectLanguage(formData.subject + " " + formData.notes);
-    var plan = buildPlan(formData.types, formData.counts);
+    var plan = buildPlan(formData.counts);
     if (!plan.length) {
       showStatus("No questions requested");
       return;
@@ -735,6 +761,11 @@ document.addEventListener("DOMContentLoaded", function () {
         var localQs = localGenerateQuestions(formData, lang);
         window.GeneratedQuestions = localQs;
         statusTextEl.textContent = "Generated " + localQs.length + " local questions";
+        var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+        if (completeBarEl && completeTextEl) {
+          completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
+          completeBarEl.classList.remove("hidden");
+        }
         return;
       }
       var questions = parseQuestions(res);
@@ -746,11 +777,21 @@ document.addEventListener("DOMContentLoaded", function () {
         window.GeneratedQuestions = questions;
         statusTextEl.textContent = "Generated " + questions.length + " questions";
       }
+      var ui2 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+      if (completeBarEl && completeTextEl) {
+        completeTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
+        completeBarEl.classList.remove("hidden");
+      }
       setTimeout(hideStatus, 1200);
     }).catch(function (err) {
       var localQs3 = localGenerateQuestions(formData, lang);
       window.GeneratedQuestions = localQs3;
       statusTextEl.textContent = "Generated " + localQs3.length + " local questions";
+      var ui3 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+      if (completeBarEl && completeTextEl) {
+        completeTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
+        completeBarEl.classList.remove("hidden");
+      }
     }).finally(function () {
       generateBtn.disabled = false;
     });
@@ -758,12 +799,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   subjectEl.addEventListener("input", updatePreview);
   centreEl.addEventListener("input", updatePreview);
-  mcEl.addEventListener("change", updatePreview);
-  longEl.addEventListener("change", updatePreview);
-  basicEl.addEventListener("input", updatePreview);
-  interEl.addEventListener("input", updatePreview);
-  advEl.addEventListener("input", updatePreview);
+  mcBasicEl.addEventListener("input", updatePreview);
+  mcInterEl.addEventListener("input", updatePreview);
+  mcAdvEl.addEventListener("input", updatePreview);
+  longBasicEl.addEventListener("input", updatePreview);
+  longInterEl.addEventListener("input", updatePreview);
+  longAdvEl.addEventListener("input", updatePreview);
   notesEl.addEventListener("input", updatePreview);
+  uiLangEl.addEventListener("change", function () { applyUILanguage(); updatePreview(); });
   logoEl.addEventListener("change", function (e) {
     var file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
     handleLogoUpload(file);
@@ -803,4 +846,5 @@ document.addEventListener("DOMContentLoaded", function () {
 
   updateYear();
   updatePreview();
+  applyUILanguage();
 });
