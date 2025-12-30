@@ -1196,15 +1196,17 @@ document.addEventListener("DOMContentLoaded", function () {
     var prompt = buildPrompt(formData.subject, formData.subject, formData.notes, lang, plan);
     showStatus("Generating questions with DeepSeek API...");
     var timeout = new Promise(function (resolve) {
-      setTimeout(function () { resolve({ timeout: true }); }, 30000); // Increased to 30 seconds
+      setTimeout(function () { resolve({ timeout: true }); }, 60000); // Increased to 60 seconds for better reliability
     });
     Promise.race([deepseekRequest(prompt, apiKey), timeout]).then(function (res) {
       if (res && res.timeout) {
         generateBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = true; // Ensure PDF buttons remain disabled on timeout
+        downloadSolutionPdfBtn.disabled = true;
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         var timeoutMsg = ui === "zh-hant"
-          ? "錯誤：API 請求超時。請檢查網絡連接並重試，或稍後再試。"
-          : "Error: API request timed out. Please check your network connection and try again, or try again later.";
+          ? "錯誤：API 請求超時（60秒）。請檢查網絡連接並重試，或稍後再試。"
+          : "Error: API request timed out (60s). Please check your network connection and try again, or try again later.";
         showStatus(timeoutMsg);
         setTimeout(hideStatus, 5000);
         return;
@@ -1212,6 +1214,8 @@ document.addEventListener("DOMContentLoaded", function () {
       // Check for API errors
       if (res && res.error) {
         generateBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = true; // Ensure PDF buttons remain disabled on error
+        downloadSolutionPdfBtn.disabled = true;
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         var errorMsg = res.error.message || (ui === "zh-hant" ? "API 錯誤" : "API Error");
         var fullErrorMsg = ui === "zh-hant"
@@ -1224,6 +1228,8 @@ document.addEventListener("DOMContentLoaded", function () {
       var questions = parseQuestions(res);
       if (!questions.length) {
         generateBtn.disabled = false;
+        downloadWorksheetPdfBtn.disabled = true; // Ensure PDF buttons remain disabled when no questions parsed
+        downloadSolutionPdfBtn.disabled = true;
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         var parseErrorMsg = ui === "zh-hant"
           ? "錯誤：無法解析 API 響應。請重試或檢查 API 響應格式。"
@@ -1247,12 +1253,24 @@ document.addEventListener("DOMContentLoaded", function () {
           statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
           downloadSolutionPdfBtn.disabled = false;
         }, 400);
+      }).catch(function (err) {
+        console.error("Error building TeX assets:", err);
+        // Even if TeX building fails, we should still enable PDF buttons since questions are generated
+        updatePreview(); // Update preview after questions are generated
+        statusTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
+        downloadWorksheetPdfBtn.disabled = false;
+        setTimeout(function () {
+          statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
+          downloadSolutionPdfBtn.disabled = false;
+        }, 400);
       }).finally(function () {
         generateBtn.disabled = false;
       });
       setTimeout(hideStatus, 1200);
     }).catch(function (err) {
       generateBtn.disabled = false;
+      downloadWorksheetPdfBtn.disabled = true; // Ensure PDF buttons remain disabled on network error
+      downloadSolutionPdfBtn.disabled = true;
       var ui3 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
       var errorMsg = ui3 === "zh-hant"
         ? "錯誤：無法連接到 API 服務器。請檢查您的網絡連接和 API 金鑰，然後重試。錯誤信息：" + (err.message || String(err))
