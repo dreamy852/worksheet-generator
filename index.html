@@ -55,7 +55,7 @@
 
         <div class="divider"></div>
 
-        <h3 class="subsection-title">Question Distribution</h3>
+        <h3 id="distTitle" class="subsection-title">Question Distribution</h3>
         <div class="form-grid thirds">
           <div class="form-field">
             <label for="mcBasicCount">MC Basic</label>
@@ -88,16 +88,16 @@
           <textarea id="notes" name="notes" rows="4" placeholder="Special instructions or constraints"></textarea>
         </div>
 
-        <h3 class="subsection-title">Interface Language</h3>
+        <h3 id="langTitle" class="subsection-title">Interface Language</h3>
         <div class="form-field">
-          <label for="uiLang">Language</label>
+          <label id="langLabel" for="uiLang">Language</label>
           <select id="uiLang" name="uiLang">
             <option value="en" selected>English</option>
             <option value="zh-hant">繁體中文</option>
           </select>
         </div>
 
-        <h3 class="subsection-title">API Settings</h3>
+        <h3 id="apiTitle" class="subsection-title">API Settings</h3>
         <div class="form-field">
           <label for="apiKey">DeepSeek API Key</label>
           <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off">

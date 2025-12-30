@@ -156,11 +156,15 @@ document.addEventListener("DOMContentLoaded", function () {
       var el = document.querySelector(selector);
       if (el) el.textContent = zh ? textZh : textEn;
     }
+    setText('.brand-text', 'Worksheet Generator', '工作紙生成器');
     setText('label[for="subject"]', 'Topic/Subject', '主題/科目');
     setText('label[for="centreName"]', 'Tutorial Centre Name', '補習中心名稱');
     setText('label[for="logo"]', 'Logo Upload', '上載標誌');
     setText('.section-title', 'Worksheet Setup', '工作紙設定');
-    setText('.subsection-title', 'Question Distribution', '題型分配');
+    setText('#distTitle', 'Question Distribution', '題型分配');
+    setText('#langTitle', 'Interface Language', '介面語言');
+    setText('#langLabel', 'Language', '語言');
+    setText('#apiTitle', 'API Settings', 'API 設定');
     setText('label[for="mcBasicCount"]', 'MC Basic', '選擇題 基礎');
     setText('label[for="mcIntermediateCount"]', 'MC Intermediate', '選擇題 中級');
     setText('label[for="mcAdvancedCount"]', 'MC Advanced', '選擇題 高級');
@@ -168,7 +172,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setText('label[for="longIntermediateCount"]', 'Long question Intermediate', '長答題 中級');
     setText('label[for="longAdvancedCount"]', 'Long question Advanced', '長答題 高級');
     setText('label[for="notes"]', 'Additional Notes', '附加說明');
-    setText('label[for="uiLang"]', 'Language', '介面語言');
+    setText('label[for="uiLang"]', 'Language', '語言');
     setText('label[for="apiKey"]', 'DeepSeek API Key', 'DeepSeek API 金鑰');
     var genBtn = document.getElementById('generateBtn');
     if (genBtn) genBtn.textContent = zh ? '生成工作紙' : 'Generate Worksheet';
@@ -334,7 +338,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       for (var qi = 0; qi < list.length; qi++) {
         var q = list[qi];
-        var numberLabel = (idx + 1) + ". ";
+        var numberLabel = (qi + 1) + ". ";
         var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
         var estimatedHeight = textLines.length * 14 + 60;
         y = ensurePage(doc, y + estimatedHeight, bottomLimit, function () {
@@ -412,7 +416,7 @@ document.addEventListener("DOMContentLoaded", function () {
       doc.setFontSize(11);
       for (var qi = 0; qi < list.length; qi++) {
         var q = list[qi];
-        var numberLabel = (idx + 1) + ". ";
+        var numberLabel = (qi + 1) + ". ";
         var textLines = wrapText(doc, q.text, pageWidth - margin * 2 - 20);
         var extra = 0;
         var mcLines = [];
@@ -729,12 +733,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function generateWithDeepSeek() {
     var apiKey = getApiKey();
+    // Disable actions during generation
+    generateBtn.disabled = true;
+    downloadWorksheetBtn.disabled = true;
+    downloadSolutionBtn.disabled = true;
     if (!apiKey) {
       var formDataNoKey = collectForm();
       var langNoKey = detectLanguage(formDataNoKey.subject + " " + formDataNoKey.notes);
       var localQsNoKey = localGenerateQuestions(formDataNoKey, langNoKey);
       window.GeneratedQuestions = localQsNoKey;
-      statusTextEl.textContent = "Generated " + localQsNoKey.length + " local questions";
+      statusTextEl.textContent = "Questions have been generated";
+      // Build TeX assets then enable buttons
+      buildTeXAssets(window.GeneratedQuestions).then(function () {
+        var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
+        statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
+        downloadWorksheetBtn.disabled = false;
+        setTimeout(function () {
+          statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
+          downloadSolutionBtn.disabled = false;
+        }, 400);
+      }).finally(function () {
+        generateBtn.disabled = false;
+      });
       var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
       if (completeBarEl && completeTextEl) {
         completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
@@ -748,11 +768,11 @@ document.addEventListener("DOMContentLoaded", function () {
     var plan = buildPlan(formData.counts);
     if (!plan.length) {
       showStatus("No questions requested");
+      generateBtn.disabled = false;
       return;
     }
     var prompt = buildPrompt(formData.subject, formData.subject, formData.notes, lang, plan);
     showStatus("Generating questions...");
-    generateBtn.disabled = true;
     var timeout = new Promise(function (resolve) {
       setTimeout(function () { resolve({ timeout: true }); }, 8000);
     });
@@ -760,40 +780,70 @@ document.addEventListener("DOMContentLoaded", function () {
       if (res && res.timeout) {
         var localQs = localGenerateQuestions(formData, lang);
         window.GeneratedQuestions = localQs;
-        statusTextEl.textContent = "Generated " + localQs.length + " local questions";
+        statusTextEl.textContent = "Questions have been generated";
         var ui = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
         if (completeBarEl && completeTextEl) {
           completeTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
           completeBarEl.classList.remove("hidden");
         }
+        return buildTeXAssets(window.GeneratedQuestions).then(function () {
+          statusTextEl.textContent = ui === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
+          downloadWorksheetBtn.disabled = false;
+          setTimeout(function () {
+            statusTextEl.textContent = ui === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
+            downloadSolutionBtn.disabled = false;
+          }, 400);
+        }).finally(function () {
+          generateBtn.disabled = false;
+        });
         return;
       }
       var questions = parseQuestions(res);
       if (!questions.length) {
         var localQs2 = localGenerateQuestions(formData, lang);
         window.GeneratedQuestions = localQs2;
-        statusTextEl.textContent = "Generated " + localQs2.length + " local questions";
+        statusTextEl.textContent = "Questions have been generated";
       } else {
         window.GeneratedQuestions = questions;
-        statusTextEl.textContent = "Generated " + questions.length + " questions";
+        statusTextEl.textContent = "Questions have been generated";
       }
       var ui2 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
       if (completeBarEl && completeTextEl) {
         completeTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
         completeBarEl.classList.remove("hidden");
       }
+      buildTeXAssets(window.GeneratedQuestions).then(function () {
+        statusTextEl.textContent = ui2 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
+        downloadWorksheetBtn.disabled = false;
+        setTimeout(function () {
+          statusTextEl.textContent = ui2 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
+          downloadSolutionBtn.disabled = false;
+        }, 400);
+      }).finally(function () {
+        generateBtn.disabled = false;
+      });
       setTimeout(hideStatus, 1200);
     }).catch(function (err) {
       var localQs3 = localGenerateQuestions(formData, lang);
       window.GeneratedQuestions = localQs3;
-      statusTextEl.textContent = "Generated " + localQs3.length + " local questions";
+      statusTextEl.textContent = "Questions have been generated";
       var ui3 = uiLangEl && uiLangEl.value ? uiLangEl.value : "en";
       if (completeBarEl && completeTextEl) {
         completeTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Worksheet generation is completed!";
         completeBarEl.classList.remove("hidden");
       }
+      buildTeXAssets(window.GeneratedQuestions).then(function () {
+        statusTextEl.textContent = ui3 === "zh-hant" ? "工作紙生成已完成！" : "Question Worksheet generation is completed.";
+        downloadWorksheetBtn.disabled = false;
+        setTimeout(function () {
+          statusTextEl.textContent = ui3 === "zh-hant" ? "解答生成已完成！" : "Answer Worksheet generation is completed.";
+          downloadSolutionBtn.disabled = false;
+        }, 400);
+      }).finally(function () {
+        generateBtn.disabled = false;
+      });
     }).finally(function () {
-      generateBtn.disabled = false;
+      // handled in branches
     });
   }
 
@@ -814,6 +864,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   generateBtn.addEventListener("click", function () {
     if (generateBtn.disabled) return;
+    // Disable downloads immediately
+    downloadWorksheetBtn.disabled = true;
+    downloadSolutionBtn.disabled = true;
     generateWithDeepSeek();
   });
 
@@ -847,4 +900,7 @@ document.addEventListener("DOMContentLoaded", function () {
   updateYear();
   updatePreview();
   applyUILanguage();
+  // Initially disable until generation happens
+  downloadWorksheetBtn.disabled = true;
+  downloadSolutionBtn.disabled = true;
 });
