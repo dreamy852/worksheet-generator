@@ -659,8 +659,8 @@
                     } else {
                         // 後兩個是長問題
                         questionTypeInstruction = isChinese
-                            ? '5. 生成一個需要詳細解答的長問題'
-                            : '5. Generate a long question that requires a detailed answer';
+                            ? '5. 生成一個需要詳細解答的長問題，但保持問題簡潔，類似原始問題的風格'
+                            : '5. Generate a long question that requires a detailed answer, but keep the question simple and similar in style to the original question';
                     }
                     
                     // 構建避免重複的提示
@@ -678,7 +678,7 @@
                             ? '6. 如果適當，使用 LaTeX 格式'
                             : '6. Use LaTeX format if appropriate');
                     
-                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. MUST have only 1 OBVIOUS answer\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. MUST have only 1 OBVIOUS answer\n6. Keep the question as SIMPLE and SIMILAR to the original question as possible. Match the original question's length and complexity. Do not make it overly complex or lengthy.\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
@@ -730,9 +730,38 @@
                             : `According to the difficulty level (Medium), the answer should be moderately detailed.`;
                     }
                     
-                    const answerPrompt = isChinese
-                        ? `Forget ALL previous chat. Clear all chats.\n\n問題：\n${questionText}\n\n請為上述問題生成答案。要求：\n1. 使用相同的語言 [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. 如果是選擇題，請標明正確答案（例如：正確答案：A）\n${answerMathRequirement ? '4' : '3'}. 如果是填空題，請提供完整的答案\n${answerMathRequirement ? '5' : '4'}. 如果是長問題，請提供解答步驟\n${answerMathRequirement ? '6' : '5'}. ${answerDetailInstruction}\n\n只輸出答案本身，不要添加任何解釋、標題或其他文字。`
-                        : `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate an answer for the above question. Requirements:\n1. Use the same language [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. If it's a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)\n${answerMathRequirement ? '4' : '3'}. If it's a fill-in-the-blank question, provide the complete answer\n${answerMathRequirement ? '5' : '4'}. If it's a long question, provide solution steps\n${answerMathRequirement ? '6' : '5'}. ${answerDetailInstruction}\n\nOutput only the answer itself, without any explanation, title, or other text.`;
+                    // 檢查是否為選擇題
+                    const isMultipleChoice = /^[A-Z]\.|A\.|B\.|C\.|D\./m.test(questionText);
+                    
+                    // 為選擇題構建答案要求
+                    let mcAnswerRequirement = '';
+                    if (isMultipleChoice) {
+                        mcAnswerRequirement = isChinese
+                            ? '2. 如果是選擇題，請標明正確答案（例如：正確答案：A），然後提供一個簡單的解釋（1-2句話）'
+                            : '2. If it\'s a multiple-choice question, indicate the correct answer (e.g., Correct answer: A), then provide a SIMPLE explanation (1-2 sentences)';
+                    } else {
+                        mcAnswerRequirement = isChinese
+                            ? '2. 如果是選擇題，請標明正確答案（例如：正確答案：A）'
+                            : '2. If it\'s a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)';
+                    }
+                    
+                    // 構建完整的答案要求列表
+                    let answerRequirements = [];
+                    let reqNum = 1;
+                    answerRequirements.push(`${reqNum++}. Use the same language [${lang}]`);
+                    if (answerMathRequirement) {
+                        answerRequirements.push(`${reqNum++}. ${answerMathRequirement.replace(/^\d+\.\s*/, '')}`);
+                    }
+                    answerRequirements.push(`${reqNum++}. ${mcAnswerRequirement.replace(/^\d+\.\s*/, '')}`);
+                    answerRequirements.push(`${reqNum++}. ${isChinese 
+                        ? '如果是填空題，請提供完整的答案'
+                        : 'If it\'s a fill-in-the-blank question, provide the complete answer'}`);
+                    answerRequirements.push(`${reqNum++}. ${isChinese
+                        ? '如果是長問題，請提供解答步驟'
+                        : 'If it\'s a long question, provide solution steps'}`);
+                    answerRequirements.push(`${reqNum++}. ${answerDetailInstruction}`);
+                    
+                    const answerPrompt = `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate an answer for the above question. Requirements:\n${answerRequirements.join('\n')}\n\nOutput only the answer itself, without any explanation, title, or other text.`;
 
                     const answerText = await callDeepSeek([
                         {
