@@ -139,13 +139,12 @@
         <div class="text-output" id="textOutput"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script>
         const pasteArea = document.getElementById('pasteArea');
         const generateBtn = document.getElementById('generateBtn');
         const textOutput = document.getElementById('textOutput');
-        let currentImageData = null;
-        const DEEPSEEK_API_KEY = 'sk-0fdaddd9f0db4e70821938381de23af6';
-        const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+        let currentImageBlob = null;
 
         // 監聽 Ctrl+V 貼上事件
         document.addEventListener('paste', (e) => {
@@ -155,12 +154,12 @@
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
                     const blob = items[i].getAsFile();
+                    currentImageBlob = blob;
                     const reader = new FileReader();
                     
                     reader.onload = (event) => {
                         const img = new Image();
                         img.src = event.target.result;
-                        currentImageData = event.target.result;
                         img.onload = () => {
                             pasteArea.innerHTML = '';
                             pasteArea.appendChild(img);
@@ -178,7 +177,7 @@
 
         // OCR 識別
         generateBtn.addEventListener('click', async () => {
-            if (!currentImageData) return;
+            if (!currentImageBlob) return;
 
             generateBtn.disabled = true;
             generateBtn.textContent = '識別中...';
@@ -186,46 +185,20 @@
             textOutput.textContent = '正在識別圖片中的文字...';
 
             try {
-                const response = await fetch(DEEPSEEK_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        model: 'deepseek-chat',
-                        messages: [
-                            {
-                                role: 'user',
-                                content: [
-                                    {
-                                        type: 'text',
-                                        text: '請識別這張圖片中的所有文字，只輸出文字內容，不要添加任何解釋或格式。'
-                                    },
-                                    {
-                                        type: 'image_url',
-                                        image_url: {
-                                            url: currentImageData
-                                        }
-                                    }
-                                ]
+                const { data: { text } } = await Tesseract.recognize(
+                    currentImageBlob,
+                    'chi_sim+eng',
+                    {
+                        logger: (m) => {
+                            if (m.status === 'recognizing text') {
+                                textOutput.textContent = `正在識別圖片中的文字... ${Math.round(m.progress * 100)}%`;
                             }
-                        ],
-                        max_tokens: 2000
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    const errorMessage = errorData.error?.message || `API 錯誤: ${response.status}`;
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                const extractedText = data.choices[0]?.message?.content || '無法識別文字';
+                        }
+                    }
+                );
 
                 textOutput.classList.remove('loading');
-                textOutput.textContent = extractedText;
+                textOutput.textContent = text.trim() || '無法識別文字';
             } catch (error) {
                 textOutput.classList.remove('loading');
                 textOutput.textContent = `錯誤: ${error.message}`;
