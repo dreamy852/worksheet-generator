@@ -193,7 +193,7 @@
                         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
                     },
                     body: JSON.stringify({
-                        model: 'deepseek-v2',
+                        model: 'deepseek-chat',
                         messages: [
                             {
                                 role: 'user',
@@ -216,7 +216,9 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API 錯誤: ${response.status}`);
+                    const errorData = await response.json().catch(() => ({}));
+                    const errorMessage = errorData.error?.message || `API 錯誤: ${response.status}`;
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
