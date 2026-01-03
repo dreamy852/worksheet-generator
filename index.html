@@ -564,12 +564,30 @@
                 debugSection.style.display = 'block';
                 ocrResult.textContent = improvedText;
 
-                // 步驟 4 & 5: 生成問題和答案（每個都是獨立請求）
-                questionsSection.classList.add('show');
-
-                // 檢測語言
+                // 檢測語言（需要在分析之前）
                 const isChinese = /[\u4e00-\u9fa5]/.test(improvedText);
                 const lang = isChinese ? 'Traditional Chinese' : 'English';
+
+                // 步驟 4: 判斷問題類型和難度
+                textOutput.textContent = '正在分析問題類型...';
+                const analysisPrompt = isChinese
+                    ? `請分析以下問題：\n\n${improvedText}\n\n請回答以下兩個問題（用簡短的一句話回答）：\n1. 這是數學問題嗎？回答「是數學問題」或「不是數學問題」\n2. 這個問題的難度等級是什麼？回答「簡單」、「中等」或「困難」`
+                    : `Please analyze the following question:\n\n${improvedText}\n\nAnswer the following two questions (in one short sentence each):\n1. Is this a math problem? Answer "MATH problem" or "NOT a MATH problem"\n2. What is the difficulty level of this question? Answer "Easy", "Medium", or "Hard"`;
+
+                const analysisResult = await callDeepSeek([
+                    {
+                        role: 'user',
+                        content: analysisPrompt
+                    }
+                ], 0.3);
+
+                // 解析分析結果
+                const isMathProblem = /數學|MATH/i.test(analysisResult);
+                const difficultyMatch = analysisResult.match(/(簡單|中等|困難|Easy|Medium|Hard)/i);
+                const difficulty = difficultyMatch ? difficultyMatch[1] : 'Medium';
+
+                // 步驟 5 & 6: 生成問題和答案（每個都是獨立請求）
+                questionsSection.classList.add('show');
 
                 const questionElements = [
                     document.querySelector('#question1 .question-content'),
@@ -592,6 +610,9 @@
                     { type: 'long', label: '長問題' }
                 ];
 
+                // 存儲已生成的問題，避免重複
+                const generatedQuestions = [];
+
                 // 依次生成：問題1 -> 答案1 -> 問題2 -> 答案2 -> 問題3 -> 答案3 -> 問題4 -> 答案4
                 for (let i = 0; i < 4; i++) {
                     // 生成問題 i+1
@@ -611,9 +632,24 @@
                             : 'Generate a long question that requires a detailed answer';
                     }
                     
+                    // 構建避免重複的提示
+                    let avoidDuplicationPrompt = '';
+                    if (generatedQuestions.length > 0) {
+                        avoidDuplicationPrompt = isChinese
+                            ? `\n\n重要：不要生成以下已存在的問題：\n${generatedQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n\n請確保生成的問題與上述問題完全不同。`
+                            : `\n\nIMPORTANT: Do NOT generate the following existing questions:\n${generatedQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n\nMake sure the generated question is completely different from the above questions.`;
+                    }
+                    
+                    // 根據是否為數學問題決定是否包含 LaTeX 要求
+                    const mathRequirement = isMathProblem
+                        ? (isChinese
+                            ? '6. 如果涉及數學公式，使用 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）'
+                            : '6. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)')
+                        : '';
+                    
                     const questionPrompt = isChinese
-                        ? `Forget ALL previous chat. Clear all chats.\n\n原始問題：\n${improvedText}\n\n請基於上述原始問題，生成一個相似的問題。要求：\n1. 保持相同的問題類型和格式（如果是填空題就生成填空題，如果是選擇題就生成選擇題）\n2. 保持相同的難度水平和主題\n3. 保持相同的語言 [${lang}]\n4. 只生成一個問題，不要生成多個問題\n5. ${questionTypeInstruction}\n6. 如果涉及數學公式，使用 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）\n\n只輸出問題本身，不要添加任何解釋、標題或其他文字。`
-                        : `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. ${questionTypeInstruction}\n6. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                        ? `Forget ALL previous chat. Clear all chats.\n\n原始問題：\n${improvedText}\n\n問題分析：\n- 問題類型：${isMathProblem ? '數學問題' : '非數學問題'}\n- 難度等級：${difficulty}\n\n請基於上述原始問題，生成一個相似的問題。要求：\n1. 保持相同的問題類型和格式（如果是填空題就生成填空題，如果是選擇題就生成選擇題）\n2. 保持相同的難度水平（${difficulty}）和主題\n3. 保持相同的語言 [${lang}]\n4. 只生成一個問題，不要生成多個問題\n5. ${questionTypeInstruction}${mathRequirement ? '\n' + mathRequirement : ''}${avoidDuplicationPrompt}\n\n只輸出問題本身，不要添加任何解釋、標題或其他文字。`
+                        : `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nQuestion analysis:\n- Question type: ${isMathProblem ? 'MATH problem' : 'NOT a MATH problem'}\n- Difficulty level: ${difficulty}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. ${questionTypeInstruction}${mathRequirement ? '\n' + mathRequirement : ''}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
@@ -627,6 +663,9 @@
                         questionElements[i].textContent = questionText;
                         renderMath(questionElements[i]);
                         
+                        // 保存已生成的問題
+                        generatedQuestions.push(questionText.trim());
+                        
                         // 顯示提示詞
                         const promptDisplay = document.getElementById(`question${i + 1}-prompt`);
                         const promptContent = document.getElementById(`question${i + 1}-prompt-content`);
@@ -638,9 +677,17 @@
 
                     // 生成答案 i+1
                     textOutput.textContent = `正在生成答案 ${i + 1}...`;
+                    
+                    // 根據是否為數學問題決定是否包含 LaTeX 要求
+                    const answerMathRequirement = isMathProblem
+                        ? (isChinese
+                            ? '2. 如果涉及數學公式，使用 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）'
+                            : '2. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)')
+                        : '';
+                    
                     const answerPrompt = isChinese
-                        ? `Forget ALL previous chat. Clear all chats.\n\n問題：\n${questionText}\n\n請為上述問題生成詳細的答案。要求：\n1. 使用相同的語言 [${lang}]\n2. 如果涉及數學公式，使用 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）\n3. 如果是選擇題，請標明正確答案（例如：正確答案：A）\n4. 如果是填空題，請提供完整的答案\n5. 如果是長問題，請提供詳細的解答步驟\n\n只輸出答案本身，不要添加任何解釋、標題或其他文字。`
-                        : `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate a detailed answer for the above question. Requirements:\n1. Use the same language [${lang}]\n2. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)\n3. If it's a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)\n4. If it's a fill-in-the-blank question, provide the complete answer\n5. If it's a long question, provide detailed solution steps\n\nOutput only the answer itself, without any explanation, title, or other text.`;
+                        ? `Forget ALL previous chat. Clear all chats.\n\n問題：\n${questionText}\n\n請為上述問題生成詳細的答案。要求：\n1. 使用相同的語言 [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. 如果是選擇題，請標明正確答案（例如：正確答案：A）\n${answerMathRequirement ? '4' : '3'}. 如果是填空題，請提供完整的答案\n${answerMathRequirement ? '5' : '4'}. 如果是長問題，請提供詳細的解答步驟\n\n只輸出答案本身，不要添加任何解釋、標題或其他文字。`
+                        : `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate a detailed answer for the above question. Requirements:\n1. Use the same language [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. If it's a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)\n${answerMathRequirement ? '4' : '3'}. If it's a fill-in-the-blank question, provide the complete answer\n${answerMathRequirement ? '5' : '4'}. If it's a long question, provide detailed solution steps\n\nOutput only the answer itself, without any explanation, title, or other text.`;
 
                     const answerText = await callDeepSeek([
                         {
