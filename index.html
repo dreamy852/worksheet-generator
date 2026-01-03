@@ -457,34 +457,13 @@
                 textOutput.classList.remove('loading');
                 textOutput.textContent = improvedText;
 
-                // 步驟 4: 生成問題
-                textOutput.textContent = '正在生成問題...';
+                // 步驟 4 & 5: 生成問題和答案（每個都是獨立請求）
                 questionsSection.classList.add('show');
 
-                // 檢測語言（簡單檢測：如果包含中文字符則為中文）
+                // 檢測語言
                 const isChinese = /[\u4e00-\u9fa5]/.test(improvedText);
-                const lang = isChinese ? '中文' : 'English';
+                const lang = isChinese ? 'Traditional Chinese' : 'English';
 
-                // 生成 2 個選擇題和 2 個長問題
-                const questionsPrompt = isChinese 
-                    ? `基於以下問題，生成 4 個類似的問題。前 2 個是選擇題（每個包含 4 個選項 A、B、C、D），後 2 個是長問題（需要詳細解答的問題）。使用 LaTeX 格式渲染所有數學公式（使用 $...$ 表示行內公式，$$...$$ 表示獨立公式）。輸出格式：每個問題單獨一行，用 "Q1:", "Q2:", "Q3:", "Q4:" 標記。保持與原問題相同的語言。\n\n原問題：\n${improvedText}`
-                    : `Based on the following question, generate 4 similar questions. The first 2 are multiple-choice questions (each with 4 options A, B, C, D), and the last 2 are long questions (requiring detailed answers). Use LaTeX format to render all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas). Output format: each question on a separate line, marked with "Q1:", "Q2:", "Q3:", "Q4:". Keep the same language as the original question.\n\nOriginal question:\n${improvedText}`;
-
-                const questionsText = await callDeepSeek([
-                    {
-                        role: 'system',
-                        content: isChinese 
-                            ? '你是一個教育問題生成助手。生成與原問題相似的問題，保持相同的語言和難度。'
-                            : 'You are an educational question generation assistant. Generate questions similar to the original, maintaining the same language and difficulty level.'
-                    },
-                    {
-                        role: 'user',
-                        content: questionsPrompt
-                    }
-                ]);
-
-                // 解析並顯示問題
-                const questions = questionsText.split(/Q[1-4]:/).filter(q => q.trim());
                 const questionElements = [
                     document.querySelector('#question1 .question-content'),
                     document.querySelector('#question2 .question-content'),
@@ -492,36 +471,6 @@
                     document.querySelector('#question4 .question-content')
                 ];
 
-                for (let i = 0; i < 4; i++) {
-                    if (questionElements[i] && questions[i]) {
-                        questionElements[i].classList.remove('loading');
-                        questionElements[i].textContent = questions[i].trim();
-                        renderMath(questionElements[i]);
-                    }
-                }
-
-                // 步驟 5: 生成答案
-                textOutput.textContent = '正在生成答案...';
-
-                const answersPrompt = isChinese
-                    ? `以下是 4 個問題，請為每個問題生成詳細的答案。使用 LaTeX 格式渲染所有數學公式（使用 $...$ 表示行內公式，$$...$$ 表示獨立公式）。輸出格式：每個答案單獨一行，用 "A1:", "A2:", "A3:", "A4:" 標記。\n\n問題：\n${questionsText}`
-                    : `Here are 4 questions. Please generate detailed answers for each question. Use LaTeX format to render all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas). Output format: each answer on a separate line, marked with "A1:", "A2:", "A3:", "A4:".\n\nQuestions:\n${questionsText}`;
-
-                const answersText = await callDeepSeek([
-                    {
-                        role: 'system',
-                        content: isChinese
-                            ? '你是一個教育答案生成助手。為問題生成詳細、準確的答案，保持相同的語言。'
-                            : 'You are an educational answer generation assistant. Generate detailed and accurate answers for questions, maintaining the same language.'
-                    },
-                    {
-                        role: 'user',
-                        content: answersPrompt
-                    }
-                ]);
-
-                // 解析並顯示答案
-                const answers = answersText.split(/A[1-4]:/).filter(a => a.trim());
                 const answerElements = [
                     document.querySelector('#answer1 .answer-content'),
                     document.querySelector('#answer2 .answer-content'),
@@ -529,10 +478,50 @@
                     document.querySelector('#answer4 .answer-content')
                 ];
 
+                const questionTypes = [
+                    { type: 'multiple-choice', label: '選擇題' },
+                    { type: 'multiple-choice', label: '選擇題' },
+                    { type: 'long', label: '長問題' },
+                    { type: 'long', label: '長問題' }
+                ];
+
+                // 依次生成：問題1 -> 答案1 -> 問題2 -> 答案2 -> 問題3 -> 答案3 -> 問題4 -> 答案4
                 for (let i = 0; i < 4; i++) {
-                    if (answerElements[i] && answers[i]) {
+                    // 生成問題 i+1
+                    textOutput.textContent = `正在生成問題 ${i + 1}...`;
+                    const questionPrompt = isChinese
+                        ? `Forget ALL previous chat. Clear all chats.\n\n${improvedText}\n\nMake 1 ${questionTypes[i].type === 'multiple-choice' ? 'multiple-choice question' : 'long question'} similar to it. Use its language [${lang}]. Use LaTeX format for all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas).`
+                        : `Forget ALL previous chat. Clear all chats.\n\n${improvedText}\n\nMake 1 ${questionTypes[i].type === 'multiple-choice' ? 'multiple-choice question' : 'long question'} similar to it. Use its language [${lang}]. Use LaTeX format for all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas).`;
+
+                    const questionText = await callDeepSeek([
+                        {
+                            role: 'user',
+                            content: questionPrompt
+                        }
+                    ]);
+
+                    if (questionElements[i]) {
+                        questionElements[i].classList.remove('loading');
+                        questionElements[i].textContent = questionText;
+                        renderMath(questionElements[i]);
+                    }
+
+                    // 生成答案 i+1
+                    textOutput.textContent = `正在生成答案 ${i + 1}...`;
+                    const answerPrompt = isChinese
+                        ? `Forget ALL previous chat. Clear all chats.\n\n${questionText}\n\nMake a solution for the previous question. Use its language [${lang}]. Use LaTeX format for all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas).`
+                        : `Forget ALL previous chat. Clear all chats.\n\n${questionText}\n\nMake a solution for the previous question. Use its language [${lang}]. Use LaTeX format for all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas).`;
+
+                    const answerText = await callDeepSeek([
+                        {
+                            role: 'user',
+                            content: answerPrompt
+                        }
+                    ]);
+
+                    if (answerElements[i]) {
                         answerElements[i].classList.remove('loading');
-                        answerElements[i].textContent = answers[i].trim();
+                        answerElements[i].textContent = answerText;
                         renderMath(answerElements[i]);
                     }
                 }
