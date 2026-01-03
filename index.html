@@ -1,143 +1,171 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Worksheet Generator</title>
-  <link rel="stylesheet" href="style.css">
-  <script>
-    window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']]
-      }
-    };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作表生成器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .paste-area {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            margin-bottom: 20px;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .paste-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .paste-area.has-image {
+            border-style: solid;
+            padding: 20px;
+        }
+
+        .paste-area img {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .paste-hint {
+            color: #667eea;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .generate-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="container header-inner">
-      <div class="brand">
-        <span class="brand-mark">WG</span>
-        <span class="brand-text">Worksheet Generator</span>
-      </div>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <button id="generateBtn" class="btn btn-primary" type="button">Generate Worksheet</button>
-        <button id="downloadWorksheetPdfBtn" class="btn" type="button" disabled>Download PDF (Worksheet)</button>
-        <button id="downloadSolutionPdfBtn" class="btn" type="button" disabled>Download PDF (Solution)</button>
-      </div>
+    <div class="container">
+        <h1>工作表生成器</h1>
+        <div class="paste-area" id="pasteArea">
+            <div class="paste-hint">按 Ctrl+V 貼上圖片</div>
+        </div>
+        <button class="generate-btn" id="generateBtn" disabled>Generate PDF</button>
     </div>
-  </header>
 
-  <main class="container main-grid">
-    <section class="card form-card">
-      <h2 class="section-title">Worksheet Setup</h2>
-      <form id="worksheetForm" novalidate>
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="subject">Topic/Subject</label>
-            <input id="subject" name="subject" type="text" list="subjects" placeholder="e.g., Mathematics" required>
-            <datalist id="subjects">
-              <option value="Mathematics"></option>
-              <option value="English"></option>
-              <option value="Science"></option>
-              <option value="Chinese"></option>
-            </datalist>
-          </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        const pasteArea = document.getElementById('pasteArea');
+        const generateBtn = document.getElementById('generateBtn');
+        let currentImage = null;
 
-          <div class="form-field">
-            <label for="centreName">Tutorial Centre Name</label>
-            <input id="centreName" name="centreName" type="text" placeholder="Your Tutorial Centre" required>
-          </div>
+        // 監聽 Ctrl+V 貼上事件
+        document.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const items = e.clipboardData.items;
+            
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    const reader = new FileReader();
+                    
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.src = event.target.result;
+                        img.onload = () => {
+                            currentImage = img;
+                            pasteArea.innerHTML = '';
+                            pasteArea.appendChild(img);
+                            pasteArea.classList.add('has-image');
+                            generateBtn.disabled = false;
+                        };
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    break;
+                }
+            }
+        });
 
-          <div class="form-field">
-            <label for="logo">Logo Upload</label>
-            <input id="logo" name="logo" type="file" accept="image/*">
-            <div class="logo-preview">
-              <img id="logoPreview" alt="" />
-            </div>
-          </div>
-        </div>
+        // 生成 PDF
+        generateBtn.addEventListener('click', () => {
+            if (!currentImage) return;
 
-        <div class="divider"></div>
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: currentImage.width > currentImage.height ? 'landscape' : 'portrait',
+                unit: 'mm',
+                format: [currentImage.width * 0.264583, currentImage.height * 0.264583]
+            });
 
-        <h3 id="distTitle" class="subsection-title">Question Distribution</h3>
-        <div class="form-grid thirds">
-          <div class="form-field">
-            <label for="mcBasicCount">MC Basic</label>
-            <input id="mcBasicCount" name="mcBasicCount" type="number" min="0" step="1" value="5">
-          </div>
-          <div class="form-field">
-            <label for="mcIntermediateCount">MC Intermediate</label>
-            <input id="mcIntermediateCount" name="mcIntermediateCount" type="number" min="0" step="1" value="5">
-          </div>
-          <div class="form-field">
-            <label for="mcAdvancedCount">MC Advanced</label>
-            <input id="mcAdvancedCount" name="mcAdvancedCount" type="number" min="0" step="1" value="5">
-          </div>
-          <div class="form-field">
-            <label for="longBasicCount">Long question Basic</label>
-            <input id="longBasicCount" name="longBasicCount" type="number" min="0" step="1" value="5">
-          </div>
-          <div class="form-field">
-            <label for="longIntermediateCount">Long question Intermediate</label>
-            <input id="longIntermediateCount" name="longIntermediateCount" type="number" min="0" step="1" value="5">
-          </div>
-          <div class="form-field">
-            <label for="longAdvancedCount">Long question Advanced</label>
-            <input id="longAdvancedCount" name="longAdvancedCount" type="number" min="0" step="1" value="5">
-          </div>
-        </div>
+            const imgData = currentImage.src;
+            const imgWidth = pdf.internal.pageSize.getWidth();
+            const imgHeight = (currentImage.height * imgWidth) / currentImage.width;
 
-        <div class="form-field">
-          <label for="notes">Additional Notes</label>
-          <textarea id="notes" name="notes" rows="4" placeholder="Special instructions or constraints"></textarea>
-        </div>
-
-        <h3 id="langTitle" class="subsection-title">Interface Language</h3>
-        <div class="form-field">
-          <label id="langLabel" for="uiLang">Language</label>
-          <select id="uiLang" name="uiLang">
-            <option value="en" selected>English</option>
-            <option value="zh-hant">繁體中文</option>
-          </select>
-        </div>
-
-        <h3 id="apiTitle" class="subsection-title">API Settings</h3>
-        <div class="form-field">
-          <label for="apiKey">DeepSeek API Key</label>
-          <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off">
-        </div>
-      </form>
-
-      <div id="statusBar" class="status hidden">
-        <div class="spinner"></div>
-        <span id="statusText">Preparing...</span>
-      </div>
-      <div id="completeBar" class="status hidden">
-        <span id="completeText">Worksheet generation is completed!</span>
-      </div>
-    </section>
-
-    <aside class="card preview-card">
-      <div class="preview-header">
-        <h2 class="preview-title" id="previewTitle">Preview</h2>
-      </div>
-      <div class="preview-body">
-        <div id="paperPreview" class="paper-preview"></div>
-      </div>
-    </aside>
-  </main>
-
-  <footer class="app-footer">
-    <div class="container footer-inner">
-      <span>© <span id="year"></span> Worksheet Generator</span>
-    </div>
-  </footer>
-
-  <script src="app.js"></script>
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+            pdf.save('worksheet.pdf');
+        });
+    </script>
 </body>
 </html>
+
