@@ -678,7 +678,7 @@
                             ? '6. 如果適當，使用 LaTeX 格式'
                             : '6. Use LaTeX format if appropriate');
                     
-                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. MUST have only 1 OBVIOUS answer\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
@@ -714,9 +714,25 @@
                             : '2. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)')
                         : '';
                     
+                    // 根據難度等級調整答案的詳細程度
+                    let answerDetailInstruction = '';
+                    if (difficulty === 'Easy' || difficulty === '簡單') {
+                        answerDetailInstruction = isChinese
+                            ? `根據難度等級（簡單），答案應該簡潔明了，使用簡單的詞彙和短句。不要生成過於詳細或複雜的解釋。`
+                            : `According to the difficulty level (Easy), the answer should be concise and clear, using simple words and short sentences. Do not generate overly detailed or complex explanations.`;
+                    } else if (difficulty === 'Hard' || difficulty === '困難') {
+                        answerDetailInstruction = isChinese
+                            ? `根據難度等級（困難），答案可以更詳細和深入。`
+                            : `According to the difficulty level (Hard), the answer can be more detailed and in-depth.`;
+                    } else {
+                        answerDetailInstruction = isChinese
+                            ? `根據難度等級（中等），答案應該適度詳細。`
+                            : `According to the difficulty level (Medium), the answer should be moderately detailed.`;
+                    }
+                    
                     const answerPrompt = isChinese
-                        ? `Forget ALL previous chat. Clear all chats.\n\n問題：\n${questionText}\n\n請為上述問題生成詳細的答案。要求：\n1. 使用相同的語言 [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. 如果是選擇題，請標明正確答案（例如：正確答案：A）\n${answerMathRequirement ? '4' : '3'}. 如果是填空題，請提供完整的答案\n${answerMathRequirement ? '5' : '4'}. 如果是長問題，請提供詳細的解答步驟\n\n只輸出答案本身，不要添加任何解釋、標題或其他文字。`
-                        : `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate a detailed answer for the above question. Requirements:\n1. Use the same language [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. If it's a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)\n${answerMathRequirement ? '4' : '3'}. If it's a fill-in-the-blank question, provide the complete answer\n${answerMathRequirement ? '5' : '4'}. If it's a long question, provide detailed solution steps\n\nOutput only the answer itself, without any explanation, title, or other text.`;
+                        ? `Forget ALL previous chat. Clear all chats.\n\n問題：\n${questionText}\n\n請為上述問題生成答案。要求：\n1. 使用相同的語言 [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. 如果是選擇題，請標明正確答案（例如：正確答案：A）\n${answerMathRequirement ? '4' : '3'}. 如果是填空題，請提供完整的答案\n${answerMathRequirement ? '5' : '4'}. 如果是長問題，請提供解答步驟\n${answerMathRequirement ? '6' : '5'}. ${answerDetailInstruction}\n\n只輸出答案本身，不要添加任何解釋、標題或其他文字。`
+                        : `Forget ALL previous chat. Clear all chats.\n\nQuestion:\n${questionText}\n\nGenerate an answer for the above question. Requirements:\n1. Use the same language [${lang}]${answerMathRequirement ? '\n' + answerMathRequirement : ''}\n${answerMathRequirement ? '3' : '2'}. If it's a multiple-choice question, indicate the correct answer (e.g., Correct answer: A)\n${answerMathRequirement ? '4' : '3'}. If it's a fill-in-the-blank question, provide the complete answer\n${answerMathRequirement ? '5' : '4'}. If it's a long question, provide solution steps\n${answerMathRequirement ? '6' : '5'}. ${answerDetailInstruction}\n\nOutput only the answer itself, without any explanation, title, or other text.`;
 
                     const answerText = await callDeepSeek([
                         {
