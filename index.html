@@ -571,20 +571,51 @@
                 // 步驟 4: 判斷問題類型和難度
                 textOutput.textContent = '正在分析問題類型...';
                 const analysisPrompt = isChinese
-                    ? `請分析以下問題：\n\n${improvedText}\n\n請回答以下兩個問題（用簡短的一句話回答）：\n1. 這是數學問題嗎？回答「是數學問題」或「不是數學問題」\n2. 這個問題的難度等級是什麼？回答「簡單」、「中等」或「困難」`
-                    : `Please analyze the following question:\n\n${improvedText}\n\nAnswer the following two questions (in one short sentence each):\n1. Is this a math problem? Answer "MATH problem" or "NOT a MATH problem"\n2. What is the difficulty level of this question? Answer "Easy", "Medium", or "Hard"`;
+                    ? `請仔細分析以下問題：\n\n${improvedText}\n\n判斷標準：\n- 數學問題：涉及數字計算、代數、幾何、微積分、統計等數學概念\n- 非數學問題：涉及語言、歷史、科學事實、個人偏好、常識等，不涉及數學計算或公式\n\n請嚴格按照以下格式回答（每行一個答案）：\n1. MATH problem 或 NOT a MATH problem\n2. Easy 或 Medium 或 Hard\n\n只輸出兩行答案，不要添加任何解釋。`
+                    : `Please carefully analyze the following question:\n\n${improvedText}\n\nCriteria:\n- MATH problem: involves numerical calculations, algebra, geometry, calculus, statistics, or other mathematical concepts\n- NOT a MATH problem: involves language, history, scientific facts, personal preferences, general knowledge, etc., without mathematical calculations or formulas\n\nPlease answer strictly in the following format (one answer per line):\n1. MATH problem or NOT a MATH problem\n2. Easy or Medium or Hard\n\nOutput only two lines of answers, without any explanation.`;
 
                 const analysisResult = await callDeepSeek([
+                    {
+                        role: 'system',
+                        content: isChinese
+                            ? '你是一個問題分析助手。嚴格按照標準判斷問題是否為數學問題。只有涉及數學計算、公式、代數、幾何等數學概念的問題才是數學問題。'
+                            : 'You are a question analysis assistant. Strictly judge whether a question is a math problem according to the criteria. Only questions involving mathematical calculations, formulas, algebra, geometry, or other mathematical concepts are math problems.'
+                    },
                     {
                         role: 'user',
                         content: analysisPrompt
                     }
-                ], 0.3);
+                ], 0.1);
 
-                // 解析分析結果
-                const isMathProblem = /數學|MATH/i.test(analysisResult);
-                const difficultyMatch = analysisResult.match(/(簡單|中等|困難|Easy|Medium|Hard)/i);
-                const difficulty = difficultyMatch ? difficultyMatch[1] : 'Medium';
+                // 解析分析結果 - 更嚴格的解析
+                const lines = analysisResult.split('\n').map(line => line.trim()).filter(line => line);
+                let isMathProblem = false;
+                let difficulty = 'Medium';
+                
+                for (const line of lines) {
+                    // 檢查是否為數學問題
+                    if (/^1[\.\)]?\s*(MATH|數學)/i.test(line) || /MATH\s+problem/i.test(line)) {
+                        isMathProblem = true;
+                    } else if (/^1[\.\)]?\s*(NOT|不是|非)/i.test(line) || /NOT\s+a\s+MATH/i.test(line)) {
+                        isMathProblem = false;
+                    }
+                    
+                    // 檢查難度
+                    const difficultyMatch = line.match(/(Easy|Medium|Hard|簡單|中等|困難)/i);
+                    if (difficultyMatch) {
+                        const d = difficultyMatch[1];
+                        if (/Easy|簡單/i.test(d)) difficulty = 'Easy';
+                        else if (/Hard|困難/i.test(d)) difficulty = 'Hard';
+                        else difficulty = 'Medium';
+                    }
+                }
+                
+                // 如果沒有明確找到，再檢查整個文本
+                if (lines.length === 0 || (!/MATH|NOT|數學|不是/i.test(analysisResult))) {
+                    // 備用檢查：如果包含明顯的數學關鍵詞，則為數學問題
+                    const mathKeywords = /calculate|solve|equation|formula|algebra|geometry|calculus|derivative|integral|matrix|function|variable|number|digit|sum|product|divide|multiply|加|減|乘|除|方程|公式|代數|幾何|計算|求解/i;
+                    isMathProblem = mathKeywords.test(improvedText);
+                }
 
                 // 步驟 5 & 6: 生成問題和答案（每個都是獨立請求）
                 questionsSection.classList.add('show');
