@@ -173,6 +173,64 @@
             color: #667eea;
             font-style: italic;
         }
+
+        .debug-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff5e6;
+            border-radius: 8px;
+            border-left: 4px solid #ff9800;
+        }
+
+        .debug-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ff9800;
+            margin-bottom: 10px;
+        }
+
+        .debug-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        .prompt-display {
+            margin-top: 10px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            border-left: 4px solid #4caf50;
+        }
+
+        .prompt-display h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4caf50;
+            margin-bottom: 8px;
+        }
+
+        .prompt-content {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
     </style>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -194,40 +252,77 @@
         <button class="generate-btn" id="generateBtn" disabled>OCR 識別</button>
         <div class="text-output" id="textOutput"></div>
         
+        <div class="debug-section" id="debugSection" style="display: none;">
+            <h3>OCR 結果（語法修正後）</h3>
+            <div class="debug-content" id="ocrResult"></div>
+        </div>
+        
         <div class="questions-section" id="questionsSection">
             <div class="questions-title">生成的問題</div>
             <div class="question-item" id="question1">
                 <h3>選擇題 1</h3>
+                <div class="prompt-display" id="question1-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="question1-prompt-content"></div>
+                </div>
                 <div class="question-content loading">生成中...</div>
             </div>
             <div class="question-item" id="question2">
                 <h3>選擇題 2</h3>
+                <div class="prompt-display" id="question2-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="question2-prompt-content"></div>
+                </div>
                 <div class="question-content loading">生成中...</div>
             </div>
             <div class="question-item" id="question3">
                 <h3>長問題 1</h3>
+                <div class="prompt-display" id="question3-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="question3-prompt-content"></div>
+                </div>
                 <div class="question-content loading">生成中...</div>
             </div>
             <div class="question-item" id="question4">
                 <h3>長問題 2</h3>
+                <div class="prompt-display" id="question4-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="question4-prompt-content"></div>
+                </div>
                 <div class="question-content loading">生成中...</div>
             </div>
             
             <div class="questions-title" style="margin-top: 40px;">答案</div>
             <div class="answer-item" id="answer1">
                 <h3>選擇題 1 答案</h3>
+                <div class="prompt-display" id="answer1-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="answer1-prompt-content"></div>
+                </div>
                 <div class="answer-content loading">生成中...</div>
             </div>
             <div class="answer-item" id="answer2">
                 <h3>選擇題 2 答案</h3>
+                <div class="prompt-display" id="answer2-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="answer2-prompt-content"></div>
+                </div>
                 <div class="answer-content loading">生成中...</div>
             </div>
             <div class="answer-item" id="answer3">
                 <h3>長問題 1 答案</h3>
+                <div class="prompt-display" id="answer3-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="answer3-prompt-content"></div>
+                </div>
                 <div class="answer-content loading">生成中...</div>
             </div>
             <div class="answer-item" id="answer4">
                 <h3>長問題 2 答案</h3>
+                <div class="prompt-display" id="answer4-prompt" style="display: none;">
+                    <h4>發送給 DeepSeek 的提示詞：</h4>
+                    <div class="prompt-content" id="answer4-prompt-content"></div>
+                </div>
                 <div class="answer-content loading">生成中...</div>
             </div>
         </div>
@@ -397,10 +492,16 @@
         // 重置問題和答案區域
         function resetQuestionsSection() {
             questionsSection.classList.remove('show');
+            document.getElementById('debugSection').style.display = 'none';
             const questionContents = document.querySelectorAll('.question-content, .answer-content');
             questionContents.forEach(el => {
                 el.classList.add('loading');
                 el.textContent = '生成中...';
+            });
+            // 隱藏所有提示詞
+            const promptDisplays = document.querySelectorAll('.prompt-display');
+            promptDisplays.forEach(el => {
+                el.style.display = 'none';
             });
         }
 
@@ -457,6 +558,12 @@
                 textOutput.classList.remove('loading');
                 textOutput.textContent = improvedText;
 
+                // 顯示 OCR 結果
+                const debugSection = document.getElementById('debugSection');
+                const ocrResult = document.getElementById('ocrResult');
+                debugSection.style.display = 'block';
+                ocrResult.textContent = improvedText;
+
                 // 步驟 4 & 5: 生成問題和答案（每個都是獨立請求）
                 questionsSection.classList.add('show');
 
@@ -504,6 +611,14 @@
                         questionElements[i].classList.remove('loading');
                         questionElements[i].textContent = questionText;
                         renderMath(questionElements[i]);
+                        
+                        // 顯示提示詞
+                        const promptDisplay = document.getElementById(`question${i + 1}-prompt`);
+                        const promptContent = document.getElementById(`question${i + 1}-prompt-content`);
+                        if (promptDisplay && promptContent) {
+                            promptDisplay.style.display = 'block';
+                            promptContent.textContent = questionPrompt;
+                        }
                     }
 
                     // 生成答案 i+1
@@ -523,6 +638,14 @@
                         answerElements[i].classList.remove('loading');
                         answerElements[i].textContent = answerText;
                         renderMath(answerElements[i]);
+                        
+                        // 顯示提示詞
+                        const answerPromptDisplay = document.getElementById(`answer${i + 1}-prompt`);
+                        const answerPromptContent = document.getElementById(`answer${i + 1}-prompt-content`);
+                        if (answerPromptDisplay && answerPromptContent) {
+                            answerPromptDisplay.style.display = 'block';
+                            answerPromptContent.textContent = answerPrompt;
+                        }
                     }
                 }
 
