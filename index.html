@@ -649,26 +649,24 @@
                     // 生成問題 i+1
                     textOutput.textContent = `正在生成問題 ${i + 1}...`;
                     
-                    // 根據問題類型構建更明確的提示詞
+                    // 根據問題類型構建指令
                     let questionTypeInstruction = '';
                     if (i < 2) {
                         // 前兩個是選擇題
                         questionTypeInstruction = isChinese
-                            ? '生成一個選擇題，包含 4 個選項（A、B、C、D），格式為：問題\nA. 選項1\nB. 選項2\nC. 選項3\nD. 選項4'
-                            : 'Generate a multiple-choice question with exactly 4 options (A, B, C, D) in the format: Question\nA. Option 1\nB. Option 2\nC. Option 3\nD. Option 4';
+                            ? '5. 生成一個選擇題，包含 4 個選項（A、B、C、D），格式為：問題\nA. 選項1\nB. 選項2\nC. 選項3\nD. 選項4'
+                            : '5. Generate a multiple-choice question with exactly 4 options (A, B, C, D) in the format: Question\nA. Option 1\nB. Option 2\nC. Option 3\nD. Option 4';
                     } else {
                         // 後兩個是長問題
                         questionTypeInstruction = isChinese
-                            ? '生成一個需要詳細解答的長問題'
-                            : 'Generate a long question that requires a detailed answer';
+                            ? '5. 生成一個需要詳細解答的長問題'
+                            : '5. Generate a long question that requires a detailed answer';
                     }
                     
                     // 構建避免重複的提示
                     let avoidDuplicationPrompt = '';
                     if (generatedQuestions.length > 0) {
-                        avoidDuplicationPrompt = isChinese
-                            ? `\n\n重要：不要生成以下已存在的問題：\n${generatedQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n\n請確保生成的問題與上述問題完全不同。`
-                            : `\n\nIMPORTANT: Do NOT generate the following existing questions:\n${generatedQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n\nMake sure the generated question is completely different from the above questions.`;
+                        avoidDuplicationPrompt = `\n\nIMPORTANT: Do NOT generate the following existing questions:\n${generatedQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n\nMake sure the generated question is completely different from the above questions.`;
                     }
                     
                     // 根據是否為數學問題決定是否包含 LaTeX 要求
@@ -676,11 +674,11 @@
                         ? (isChinese
                             ? '6. 如果涉及數學公式，使用 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）'
                             : '6. If mathematical formulas are involved, use LaTeX format ($...$ for inline formulas, $$...$$ for display formulas)')
-                        : '';
+                        : (isChinese
+                            ? '6. 如果適當，使用 LaTeX 格式'
+                            : '6. Use LaTeX format if appropriate');
                     
-                    const questionPrompt = isChinese
-                        ? `Forget ALL previous chat. Clear all chats.\n\n原始問題：\n${improvedText}\n\n問題分析：\n- 問題類型：${isMathProblem ? '數學問題' : '非數學問題'}\n- 難度等級：${difficulty}\n\n請基於上述原始問題，生成一個相似的問題。要求：\n1. 保持相同的問題類型和格式（如果是填空題就生成填空題，如果是選擇題就生成選擇題）\n2. 保持相同的難度水平（${difficulty}）和主題\n3. 保持相同的語言 [${lang}]\n4. 只生成一個問題，不要生成多個問題\n5. ${questionTypeInstruction}${mathRequirement ? '\n' + mathRequirement : ''}${avoidDuplicationPrompt}\n\n只輸出問題本身，不要添加任何解釋、標題或其他文字。`
-                        : `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nQuestion analysis:\n- Question type: ${isMathProblem ? 'MATH problem' : 'NOT a MATH problem'}\n- Difficulty level: ${difficulty}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. ${questionTypeInstruction}${mathRequirement ? '\n' + mathRequirement : ''}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nQuestion analysis:\n- Question type: ${isMathProblem ? 'MATH problem' : 'NOT a MATH problem'}\n- Difficulty level: ${difficulty}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
