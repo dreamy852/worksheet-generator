@@ -678,7 +678,7 @@
                             ? '6. 如果適當，使用 LaTeX 格式'
                             : '6. Use LaTeX format if appropriate');
                     
-                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nQuestion analysis:\n- Question type: ${isMathProblem ? 'MATH problem' : 'NOT a MATH problem'}\n- Difficulty level: ${difficulty}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
