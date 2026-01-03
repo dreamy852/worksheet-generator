@@ -145,6 +145,8 @@
         const generateBtn = document.getElementById('generateBtn');
         const textOutput = document.getElementById('textOutput');
         let currentImageBlob = null;
+        const DEEPSEEK_API_KEY = 'sk-0fdaddd9f0db4e70821938381de23af6';
+        const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
         // 監聽 Ctrl+V 貼上事件
         document.addEventListener('paste', (e) => {
@@ -277,7 +279,7 @@
                 
                 // 步驟 2: 使用 Tesseract.js 進行 OCR
                 textOutput.textContent = '正在識別圖片中的文字...';
-                const { data: { text } } = await Tesseract.recognize(
+                const { data: { text: ocrText } } = await Tesseract.recognize(
                     enhancedBlob,
                     'chi_sim+eng',
                     {
@@ -289,9 +291,50 @@
                     }
                 );
 
-                // 步驟 3: 輸出文字
+                const rawText = ocrText.trim();
+                if (!rawText) {
+                    textOutput.classList.remove('loading');
+                    textOutput.textContent = '無法識別文字';
+                    return;
+                }
+
+                // 步驟 3: 使用 DeepSeek 改善文字語法和流暢度
+                textOutput.textContent = '正在使用 AI 改善文字語法和流暢度...';
+                const response = await fetch(DEEPSEEK_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'deepseek-chat',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: '你是一個文字編輯助手。你的任務是改善文字的語法和流暢度，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正錯別字和語法錯誤 4. 保持原意不變 5. 只輸出改善後的文字，不要添加任何解釋或說明'
+                            },
+                            {
+                                role: 'user',
+                                content: `請改善以下文字的語法和流暢度，但不要添加或刪減任何內容，只修正錯別字和語法錯誤：\n\n${rawText}`
+                            }
+                        ],
+                        max_tokens: 2000,
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    const errorMessage = errorData.error?.message || `API 錯誤: ${response.status}`;
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+                const improvedText = data.choices[0]?.message?.content?.trim() || rawText;
+
+                // 步驟 4: 輸出最終文字
                 textOutput.classList.remove('loading');
-                textOutput.textContent = text.trim() || '無法識別文字';
+                textOutput.textContent = improvedText;
             } catch (error) {
                 textOutput.classList.remove('loading');
                 textOutput.textContent = `錯誤: ${error.message}`;
