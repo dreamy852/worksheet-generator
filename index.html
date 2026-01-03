@@ -127,7 +127,63 @@
             color: #667eea;
             font-style: italic;
         }
+
+        .questions-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .questions-section.show {
+            display: block;
+        }
+
+        .questions-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .question-item, .answer-item {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .question-item h3, .answer-item h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .question-content, .answer-content {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .question-content.loading, .answer-content.loading {
+            color: #667eea;
+            font-style: italic;
+        }
     </style>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
 </head>
 <body>
     <div class="container">
@@ -137,6 +193,44 @@
         </div>
         <button class="generate-btn" id="generateBtn" disabled>OCR 識別</button>
         <div class="text-output" id="textOutput"></div>
+        
+        <div class="questions-section" id="questionsSection">
+            <div class="questions-title">生成的問題</div>
+            <div class="question-item" id="question1">
+                <h3>選擇題 1</h3>
+                <div class="question-content loading">生成中...</div>
+            </div>
+            <div class="question-item" id="question2">
+                <h3>選擇題 2</h3>
+                <div class="question-content loading">生成中...</div>
+            </div>
+            <div class="question-item" id="question3">
+                <h3>長問題 1</h3>
+                <div class="question-content loading">生成中...</div>
+            </div>
+            <div class="question-item" id="question4">
+                <h3>長問題 2</h3>
+                <div class="question-content loading">生成中...</div>
+            </div>
+            
+            <div class="questions-title" style="margin-top: 40px;">答案</div>
+            <div class="answer-item" id="answer1">
+                <h3>選擇題 1 答案</h3>
+                <div class="answer-content loading">生成中...</div>
+            </div>
+            <div class="answer-item" id="answer2">
+                <h3>選擇題 2 答案</h3>
+                <div class="answer-content loading">生成中...</div>
+            </div>
+            <div class="answer-item" id="answer3">
+                <h3>長問題 1 答案</h3>
+                <div class="answer-content loading">生成中...</div>
+            </div>
+            <div class="answer-item" id="answer4">
+                <h3>長問題 2 答案</h3>
+                <div class="answer-content loading">生成中...</div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -144,9 +238,45 @@
         const pasteArea = document.getElementById('pasteArea');
         const generateBtn = document.getElementById('generateBtn');
         const textOutput = document.getElementById('textOutput');
+        const questionsSection = document.getElementById('questionsSection');
         let currentImageBlob = null;
         const DEEPSEEK_API_KEY = 'sk-0fdaddd9f0db4e70821938381de23af6';
         const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+        // 調用 DeepSeek API
+        async function callDeepSeek(messages, temperature = 0.7) {
+            const response = await fetch(DEEPSEEK_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: messages,
+                    max_tokens: 2000,
+                    temperature: temperature
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.error?.message || `API 錯誤: ${response.status}`;
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            return data.choices[0]?.message?.content?.trim() || '';
+        }
+
+        // 渲染 LaTeX
+        function renderMath(element) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([element]).catch((err) => {
+                    console.error('MathJax rendering error:', err);
+                });
+            }
+        }
 
         // 監聽 Ctrl+V 貼上事件
         document.addEventListener('paste', (e) => {
@@ -168,6 +298,7 @@
                             pasteArea.classList.add('has-image');
                             generateBtn.disabled = false;
                             textOutput.classList.remove('show');
+                            resetQuestionsSection();
                         };
                     };
                     
@@ -263,6 +394,16 @@
             });
         }
 
+        // 重置問題和答案區域
+        function resetQuestionsSection() {
+            questionsSection.classList.remove('show');
+            const questionContents = document.querySelectorAll('.question-content, .answer-content');
+            questionContents.forEach(el => {
+                el.classList.add('loading');
+                el.textContent = '生成中...';
+            });
+        }
+
         // OCR 識別
         generateBtn.addEventListener('click', async () => {
             if (!currentImageBlob) return;
@@ -271,6 +412,7 @@
             generateBtn.textContent = '處理中...';
             textOutput.classList.add('show', 'loading');
             textOutput.textContent = '正在放大並增強圖片清晰度...';
+            resetQuestionsSection();
 
             try {
                 // 步驟 1: 放大並增強圖片
@@ -300,41 +442,103 @@
 
                 // 步驟 3: 使用 DeepSeek 改善文字語法和流暢度
                 textOutput.textContent = '正在使用 AI 改善文字語法和流暢度...';
-                const response = await fetch(DEEPSEEK_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                const improvedText = await callDeepSeek([
+                    {
+                        role: 'system',
+                        content: '你是一個文字編輯助手。你的任務是改善文字的語法和流暢度，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正錯別字和語法錯誤 4. 保持原意不變 5. 只輸出改善後的文字，不要添加任何解釋或說明'
                     },
-                    body: JSON.stringify({
-                        model: 'deepseek-chat',
-                        messages: [
-                            {
-                                role: 'system',
-                                content: '你是一個文字編輯助手。你的任務是改善文字的語法和流暢度，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正錯別字和語法錯誤 4. 保持原意不變 5. 只輸出改善後的文字，不要添加任何解釋或說明'
-                            },
-                            {
-                                role: 'user',
-                                content: `請改善以下文字的語法和流暢度，但不要添加或刪減任何內容，只修正錯別字和語法錯誤：\n\n${rawText}`
-                            }
-                        ],
-                        max_tokens: 2000,
-                        temperature: 0.3
-                    })
-                });
+                    {
+                        role: 'user',
+                        content: `請改善以下文字的語法和流暢度，但不要添加或刪減任何內容，只修正錯別字和語法錯誤：\n\n${rawText}`
+                    }
+                ], 0.3);
 
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    const errorMessage = errorData.error?.message || `API 錯誤: ${response.status}`;
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                const improvedText = data.choices[0]?.message?.content?.trim() || rawText;
-
-                // 步驟 4: 輸出最終文字
+                // 顯示改善後的文字
                 textOutput.classList.remove('loading');
                 textOutput.textContent = improvedText;
+
+                // 步驟 4: 生成問題
+                textOutput.textContent = '正在生成問題...';
+                questionsSection.classList.add('show');
+
+                // 檢測語言（簡單檢測：如果包含中文字符則為中文）
+                const isChinese = /[\u4e00-\u9fa5]/.test(improvedText);
+                const lang = isChinese ? '中文' : 'English';
+
+                // 生成 2 個選擇題和 2 個長問題
+                const questionsPrompt = isChinese 
+                    ? `基於以下問題，生成 4 個類似的問題。前 2 個是選擇題（每個包含 4 個選項 A、B、C、D），後 2 個是長問題（需要詳細解答的問題）。使用 LaTeX 格式渲染所有數學公式（使用 $...$ 表示行內公式，$$...$$ 表示獨立公式）。輸出格式：每個問題單獨一行，用 "Q1:", "Q2:", "Q3:", "Q4:" 標記。保持與原問題相同的語言。\n\n原問題：\n${improvedText}`
+                    : `Based on the following question, generate 4 similar questions. The first 2 are multiple-choice questions (each with 4 options A, B, C, D), and the last 2 are long questions (requiring detailed answers). Use LaTeX format to render all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas). Output format: each question on a separate line, marked with "Q1:", "Q2:", "Q3:", "Q4:". Keep the same language as the original question.\n\nOriginal question:\n${improvedText}`;
+
+                const questionsText = await callDeepSeek([
+                    {
+                        role: 'system',
+                        content: isChinese 
+                            ? '你是一個教育問題生成助手。生成與原問題相似的問題，保持相同的語言和難度。'
+                            : 'You are an educational question generation assistant. Generate questions similar to the original, maintaining the same language and difficulty level.'
+                    },
+                    {
+                        role: 'user',
+                        content: questionsPrompt
+                    }
+                ]);
+
+                // 解析並顯示問題
+                const questions = questionsText.split(/Q[1-4]:/).filter(q => q.trim());
+                const questionElements = [
+                    document.querySelector('#question1 .question-content'),
+                    document.querySelector('#question2 .question-content'),
+                    document.querySelector('#question3 .question-content'),
+                    document.querySelector('#question4 .question-content')
+                ];
+
+                for (let i = 0; i < 4; i++) {
+                    if (questionElements[i] && questions[i]) {
+                        questionElements[i].classList.remove('loading');
+                        questionElements[i].textContent = questions[i].trim();
+                        renderMath(questionElements[i]);
+                    }
+                }
+
+                // 步驟 5: 生成答案
+                textOutput.textContent = '正在生成答案...';
+
+                const answersPrompt = isChinese
+                    ? `以下是 4 個問題，請為每個問題生成詳細的答案。使用 LaTeX 格式渲染所有數學公式（使用 $...$ 表示行內公式，$$...$$ 表示獨立公式）。輸出格式：每個答案單獨一行，用 "A1:", "A2:", "A3:", "A4:" 標記。\n\n問題：\n${questionsText}`
+                    : `Here are 4 questions. Please generate detailed answers for each question. Use LaTeX format to render all mathematical formulas (use $...$ for inline formulas and $$...$$ for display formulas). Output format: each answer on a separate line, marked with "A1:", "A2:", "A3:", "A4:".\n\nQuestions:\n${questionsText}`;
+
+                const answersText = await callDeepSeek([
+                    {
+                        role: 'system',
+                        content: isChinese
+                            ? '你是一個教育答案生成助手。為問題生成詳細、準確的答案，保持相同的語言。'
+                            : 'You are an educational answer generation assistant. Generate detailed and accurate answers for questions, maintaining the same language.'
+                    },
+                    {
+                        role: 'user',
+                        content: answersPrompt
+                    }
+                ]);
+
+                // 解析並顯示答案
+                const answers = answersText.split(/A[1-4]:/).filter(a => a.trim());
+                const answerElements = [
+                    document.querySelector('#answer1 .answer-content'),
+                    document.querySelector('#answer2 .answer-content'),
+                    document.querySelector('#answer3 .answer-content'),
+                    document.querySelector('#answer4 .answer-content')
+                ];
+
+                for (let i = 0; i < 4; i++) {
+                    if (answerElements[i] && answers[i]) {
+                        answerElements[i].classList.remove('loading');
+                        answerElements[i].textContent = answers[i].trim();
+                        renderMath(answerElements[i]);
+                    }
+                }
+
+                textOutput.textContent = '完成！';
+                textOutput.classList.remove('loading');
             } catch (error) {
                 textOutput.classList.remove('loading');
                 textOutput.textContent = `錯誤: ${error.message}`;
