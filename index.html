@@ -102,6 +102,31 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        .text-output {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            min-height: 100px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+            display: none;
+        }
+
+        .text-output.show {
+            display: block;
+        }
+
+        .text-output.loading {
+            color: #667eea;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -110,14 +135,17 @@
         <div class="paste-area" id="pasteArea">
             <div class="paste-hint">按 Ctrl+V 貼上圖片</div>
         </div>
-        <button class="generate-btn" id="generateBtn" disabled>Generate PDF</button>
+        <button class="generate-btn" id="generateBtn" disabled>OCR 識別</button>
+        <div class="text-output" id="textOutput"></div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         const pasteArea = document.getElementById('pasteArea');
         const generateBtn = document.getElementById('generateBtn');
-        let currentImage = null;
+        const textOutput = document.getElementById('textOutput');
+        let currentImageData = null;
+        const DEEPSEEK_API_KEY = 'sk-0fdaddd9f0db4e70821938381de23af6';
+        const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
         // 監聽 Ctrl+V 貼上事件
         document.addEventListener('paste', (e) => {
@@ -132,12 +160,13 @@
                     reader.onload = (event) => {
                         const img = new Image();
                         img.src = event.target.result;
+                        currentImageData = event.target.result;
                         img.onload = () => {
-                            currentImage = img;
                             pasteArea.innerHTML = '';
                             pasteArea.appendChild(img);
                             pasteArea.classList.add('has-image');
                             generateBtn.disabled = false;
+                            textOutput.classList.remove('show');
                         };
                     };
                     
@@ -147,23 +176,61 @@
             }
         });
 
-        // 生成 PDF
-        generateBtn.addEventListener('click', () => {
-            if (!currentImage) return;
+        // OCR 識別
+        generateBtn.addEventListener('click', async () => {
+            if (!currentImageData) return;
 
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({
-                orientation: currentImage.width > currentImage.height ? 'landscape' : 'portrait',
-                unit: 'mm',
-                format: [currentImage.width * 0.264583, currentImage.height * 0.264583]
-            });
+            generateBtn.disabled = true;
+            generateBtn.textContent = '識別中...';
+            textOutput.classList.add('show', 'loading');
+            textOutput.textContent = '正在識別圖片中的文字...';
 
-            const imgData = currentImage.src;
-            const imgWidth = pdf.internal.pageSize.getWidth();
-            const imgHeight = (currentImage.height * imgWidth) / currentImage.width;
+            try {
+                const response = await fetch(DEEPSEEK_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'deepseek-v2',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: '請識別這張圖片中的所有文字，只輸出文字內容，不要添加任何解釋或格式。'
+                                    },
+                                    {
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: currentImageData
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 2000
+                    })
+                });
 
-            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-            pdf.save('worksheet.pdf');
+                if (!response.ok) {
+                    throw new Error(`API 錯誤: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const extractedText = data.choices[0]?.message?.content || '無法識別文字';
+
+                textOutput.classList.remove('loading');
+                textOutput.textContent = extractedText;
+            } catch (error) {
+                textOutput.classList.remove('loading');
+                textOutput.textContent = `錯誤: ${error.message}`;
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'OCR 識別';
+            }
         });
     </script>
 </body>
