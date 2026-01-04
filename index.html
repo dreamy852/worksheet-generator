@@ -337,6 +337,10 @@
         let currentImageBlob = null;
         const DEEPSEEK_API_KEY = 'sk-0fdaddd9f0db4e70821938381de23af6';
         const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+        // Mathpix API 配置（可選，如果有的話）
+        const MATHPIX_APP_ID = ''; // 請填入您的 Mathpix App ID
+        const MATHPIX_APP_KEY = ''; // 請填入您的 Mathpix App Key
+        const MATHPIX_API_URL = 'https://api.mathpix.com/v3/text';
 
         // 調用 DeepSeek API
         async function callDeepSeek(messages, temperature = 0.7) {
@@ -362,6 +366,107 @@
 
             const data = await response.json();
             return data.choices[0]?.message?.content?.trim() || '';
+        }
+
+        // 將圖片轉換為 base64
+        async function imageToBase64(imageBlob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(imageBlob);
+            });
+        }
+
+        // 使用 DeepSeek 視覺模型識別數學公式並轉換為 LaTeX
+        async function recognizeMathWithDeepSeek(imageBlob) {
+            try {
+                const base64Image = await imageToBase64(imageBlob);
+                const imageUrl = `data:image/png;base64,${base64Image}`;
+                
+                const response = await fetch(DEEPSEEK_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'deepseek-chat',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: '請仔細識別這張圖片中的所有內容。對於文字部分，請逐字逐句地識別。對於數學公式和方程式，請轉換為 LaTeX 格式（使用 $...$ 表示行內公式，$$...$$ 表示獨立公式）。請保持原始格式和結構，將文字和 LaTeX 公式混合輸出。'
+                                    },
+                                    {
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: imageUrl
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 4000,
+                        temperature: 0.1
+                    })
+                });
+
+                if (!response.ok) {
+                    // 如果 DeepSeek 不支持視覺模型，返回 null
+                    return null;
+                }
+
+                const data = await response.json();
+                return data.choices[0]?.message?.content?.trim() || null;
+            } catch (error) {
+                console.error('DeepSeek 視覺識別錯誤:', error);
+                return null;
+            }
+        }
+
+        // 使用 Mathpix API 識別數學公式
+        async function recognizeMathWithMathpix(imageBlob) {
+            if (!MATHPIX_APP_ID || !MATHPIX_APP_KEY) {
+                return null;
+            }
+
+            try {
+                const base64Image = await imageToBase64(imageBlob);
+                
+                const response = await fetch(MATHPIX_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'app_id': MATHPIX_APP_ID,
+                        'app_key': MATHPIX_APP_KEY
+                    },
+                    body: JSON.stringify({
+                        src: `data:image/png;base64,${base64Image}`,
+                        formats: ['text', 'latex_styled'],
+                        data_options: {
+                            include_latex: true,
+                            include_asciimath: true
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    return null;
+                }
+
+                const data = await response.json();
+                // Mathpix 返回的格式可能包含 text 和 latex_styled
+                return data.text || data.latex_styled || null;
+            } catch (error) {
+                console.error('Mathpix API 錯誤:', error);
+                return null;
+            }
         }
 
         // 渲染 LaTeX
@@ -520,39 +625,71 @@
                 textOutput.textContent = '正在放大並增強圖片清晰度...';
                 const enhancedBlob = await enhanceImage(currentImageBlob);
                 
-                // 步驟 2: 使用 Tesseract.js 進行 OCR
-                textOutput.textContent = '正在識別圖片中的文字...';
-                const { data: { text: ocrText } } = await Tesseract.recognize(
-                    enhancedBlob,
-                    'chi_sim+eng',
-                    {
-                        logger: (m) => {
-                            if (m.status === 'recognizing text') {
-                                textOutput.textContent = `正在識別圖片中的文字... ${Math.round(m.progress * 100)}%`;
+                // 步驟 2: 嘗試使用 DeepSeek 視覺模型識別（包括數學公式轉 LaTeX）
+                let rawText = '';
+                let deepSeekResult = null;
+                textOutput.textContent = '正在使用 AI 識別圖片內容（包括數學公式）...';
+                
+                deepSeekResult = await recognizeMathWithDeepSeek(enhancedBlob);
+                
+                if (deepSeekResult && deepSeekResult.trim()) {
+                    // 如果 DeepSeek 視覺識別成功，使用其結果
+                    rawText = deepSeekResult.trim();
+                    textOutput.textContent = 'AI 識別成功，正在處理...';
+                } else {
+                    // 如果 DeepSeek 視覺識別失敗，回退到 Tesseract
+                    textOutput.textContent = '正在使用 OCR 識別圖片中的文字...';
+                    const { data: { text: ocrText } } = await Tesseract.recognize(
+                        enhancedBlob,
+                        'chi_sim+eng',
+                        {
+                            logger: (m) => {
+                                if (m.status === 'recognizing text') {
+                                    textOutput.textContent = `正在識別圖片中的文字... ${Math.round(m.progress * 100)}%`;
+                                }
                             }
                         }
-                    }
-                );
+                    );
+                    rawText = ocrText.trim();
+                }
 
-                const rawText = ocrText.trim();
                 if (!rawText) {
                     textOutput.classList.remove('loading');
                     textOutput.textContent = '無法識別文字';
                     return;
                 }
 
-                // 步驟 3: 使用 DeepSeek 改善文字語法和流暢度
-                textOutput.textContent = '正在使用 AI 改善文字語法和流暢度...';
-                const improvedText = await callDeepSeek([
-                    {
-                        role: 'system',
-                        content: '你是一個文字編輯助手。你的任務是改善文字的語法和流暢度，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正錯別字和語法錯誤 4. 保持原意不變 5. 只輸出改善後的文字，不要添加任何解釋或說明'
-                    },
-                    {
-                        role: 'user',
-                        content: `請改善以下文字的語法和流暢度，但不要添加或刪減任何內容，只修正錯別字和語法錯誤：\n\n${rawText}`
-                    }
-                ], 0.3);
+                // 步驟 3: 判斷是否已經使用 DeepSeek 視覺模型識別（包含 LaTeX）
+                const isFromDeepSeekVision = deepSeekResult && deepSeekResult.trim();
+                let improvedText = rawText;
+                
+                if (!isFromDeepSeekVision) {
+                    // 如果使用 Tesseract 識別，則需要改善文字語法和流暢度
+                    textOutput.textContent = '正在使用 AI 改善文字語法和流暢度...';
+                    improvedText = await callDeepSeek([
+                        {
+                            role: 'system',
+                            content: '你是一個文字編輯助手。你的任務是改善文字的語法和流暢度，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正錯別字和語法錯誤 4. 保持原意不變 5. 如果包含數學公式，請轉換為 LaTeX 格式（$...$ 表示行內公式，$$...$$ 表示獨立公式）6. 只輸出改善後的文字，不要添加任何解釋或說明'
+                        },
+                        {
+                            role: 'user',
+                            content: `請改善以下文字的語法和流暢度，如果包含數學公式請轉換為 LaTeX 格式，但不要添加或刪減任何內容，只修正錯別字和語法錯誤：\n\n${rawText}`
+                        }
+                    ], 0.3);
+                } else {
+                    // 如果已經使用 DeepSeek 視覺模型，只需要輕微改善（保持 LaTeX 格式）
+                    textOutput.textContent = '正在優化識別結果...';
+                    improvedText = await callDeepSeek([
+                        {
+                            role: 'system',
+                            content: '你是一個文字編輯助手。你的任務是輕微改善已識別的內容，但必須嚴格遵守以下規則：1. 不能添加任何新內容 2. 不能刪除任何內容 3. 只能根據上下文修正明顯的錯別字 4. 保持所有 LaTeX 公式不變（$...$ 和 $$...$$）5. 保持原意和格式不變 6. 只輸出改善後的文字，不要添加任何解釋或說明'
+                        },
+                        {
+                            role: 'user',
+                            content: `請輕微改善以下內容，保持所有 LaTeX 公式不變，只修正明顯的錯別字：\n\n${rawText}`
+                        }
+                    ], 0.1);
+                }
 
                 // 顯示改善後的文字
                 textOutput.classList.remove('loading');
@@ -678,7 +815,7 @@
                             ? '6. 如果適當，使用 LaTeX 格式'
                             : '6. Use LaTeX format if appropriate');
                     
-                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question type and format (if it's a fill-in-the-blank, generate a fill-in-the-blank; if it's multiple-choice, generate multiple-choice)\n2. Maintain the same difficulty level (${difficulty}) and topic\n3. Maintain the same language [${lang}]\n4. Generate ONLY ONE question, do not generate multiple questions\n5. MUST have only 1 OBVIOUS answer\n6. Keep the question as SIMPLE and SIMILAR to the original question as possible. Match the original question's length and complexity. Do not make it overly complex or lengthy.\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
+                    const questionPrompt = `Forget ALL previous chat. Clear all chats.\n\nOriginal question:\n${improvedText}\n\nBased on the above original question, generate ONE similar question. Requirements:\n1. Maintain the same question TOPIC and DIFFICULTY and LANGUAGE, can be creative.\n2. Generate ONLY ONE question, do not generate multiple questions\n3. MUST have only 1 OBVIOUS answer\n4. The question MUST make sense\n5. Be creative with the question format and wording. You can vary the phrasing, structure, and presentation style while keeping the same topic and difficulty. The question does not need to follow the exact same format as the original - feel free to express it differently as long as it tests the same concepts.\n${questionTypeInstruction}\n${mathRequirement}${avoidDuplicationPrompt}\n\nOutput only the question itself, without any explanation, title, or other text.`;
 
                     const questionText = await callDeepSeek([
                         {
