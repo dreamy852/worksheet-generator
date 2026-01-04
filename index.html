@@ -654,13 +654,13 @@
                     if (i < 2) {
                         // 前兩個是選擇題
                         questionTypeInstruction = isChinese
-                            ? '5. 生成一個選擇題，包含 4 個選項（A、B、C、D），格式為：問題\nA. 選項1\nB. 選項2\nC. 選項3\nD. 選項4'
-                            : '5. Generate a multiple-choice question with exactly 4 options (A, B, C, D) in the format: Question\nA. Option 1\nB. Option 2\nC. Option 3\nD. Option 4';
+                            ? '5. MUST be Multiple choice of 4 answer. 生成一個選擇題，包含 4 個選項（A、B、C、D），格式為：問題\nA. 選項1\nB. 選項2\nC. 選項3\nD. 選項4'
+                            : '5. MUST be Multiple choice of 4 answer. Generate a multiple-choice question with exactly 4 options (A, B, C, D) in the format: Question\nA. Option 1\nB. Option 2\nC. Option 3\nD. Option 4';
                     } else {
                         // 後兩個是長問題
                         questionTypeInstruction = isChinese
-                            ? '5. 生成一個需要詳細解答的長問題，但保持問題簡潔，類似原始問題的風格'
-                            : '5. Generate a long question that requires a detailed answer, but keep the question simple and similar in style to the original question';
+                            ? '5. MUST be a long question without multiple choice. 生成一個需要詳細解答的長問題，但保持問題簡潔，類似原始問題的風格'
+                            : '5. MUST be a long question without multiple choice. Generate a long question that requires a detailed answer, but keep the question simple and similar in style to the original question';
                     }
                     
                     // 構建避免重複的提示
