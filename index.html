@@ -262,16 +262,26 @@
         // Initialize Tesseract worker
         async function initWorker() {
             if (!worker) {
-                worker = await Tesseract.createWorker('chi_tra+chi_sim+eng', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const progress = Math.round(m.progress * 100);
-                            progressFill.style.width = progress + '%';
-                            progressFill.textContent = progress + '%';
-                            progressText.textContent = `Recognizing text... ${progress}%`;
+                try {
+                    progressText.textContent = 'Loading OCR engine...';
+                    worker = await Tesseract.createWorker('chi_tra+chi_sim+eng', 1, {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                const progress = Math.round(m.progress * 100);
+                                progressFill.style.width = progress + '%';
+                                progressFill.textContent = progress + '%';
+                                progressText.textContent = `Recognizing text... ${progress}%`;
+                            } else if (m.status === 'loading language traineddata') {
+                                progressText.textContent = 'Loading language data...';
+                            } else if (m.status === 'initializing tesseract') {
+                                progressText.textContent = 'Initializing OCR engine...';
+                            }
                         }
-                    }
-                });
+                    });
+                } catch (error) {
+                    console.error('Worker initialization error:', error);
+                    throw new Error('Failed to initialize OCR engine: ' + (error?.message || error?.toString() || 'Unknown error'));
+                }
             }
             return worker;
         }
@@ -291,15 +301,29 @@
 
         // Handle image file and process automatically
         async function handleImageFile(file) {
+            if (!file) {
+                console.error('No file provided');
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = async (e) => {
-                currentImage = e.target.result;
-                previewImage.src = currentImage;
-                previewImage.classList.add('show');
-                resultsSection.style.display = 'none';
-                
-                // Automatically process the image
-                await processImage();
+                try {
+                    currentImage = e.target.result;
+                    previewImage.src = currentImage;
+                    previewImage.classList.add('show');
+                    resultsSection.style.display = 'none';
+                    
+                    // Automatically process the image
+                    await processImage();
+                } catch (error) {
+                    console.error('Error handling image:', error);
+                    showError(error);
+                }
+            };
+            reader.onerror = (error) => {
+                console.error('FileReader error:', error);
+                showError(new Error('Failed to read image file'));
             };
             reader.readAsDataURL(file);
         }
@@ -318,7 +342,16 @@
                 await initWorker();
                 progressText.textContent = 'Processing image...';
 
-                const { data: { text } } = await worker.recognize(currentImage);
+                if (!worker) {
+                    throw new Error('OCR worker not initialized');
+                }
+                
+                const result = await worker.recognize(currentImage);
+                if (!result || !result.data) {
+                    throw new Error('OCR recognition returned no data');
+                }
+                
+                const text = result.data.text || '';
                 
                 // Format text with inline LaTeX
                 const formattedText = formatTextWithLatex(text);
@@ -329,10 +362,17 @@
 
             } catch (error) {
                 console.error('OCR Error:', error);
-                progressText.textContent = 'Error: ' + error.message;
-                resultsSection.innerHTML = `<div class="error-message">Error processing image: ${error.message}</div>`;
-                resultsSection.style.display = 'block';
+                showError(error);
             }
+        }
+
+        // Show error message
+        function showError(error) {
+            const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+            progressText.textContent = 'Error: ' + errorMessage;
+            resultsSection.innerHTML = `<div class="error-message">Error processing image: ${errorMessage}</div>`;
+            resultsSection.style.display = 'block';
+            progressSection.classList.remove('show');
         }
 
         // Format text with inline LaTeX equations
