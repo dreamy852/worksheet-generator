@@ -257,10 +257,26 @@
         const outputTextDiv = document.getElementById('outputText');
 
         let currentImage = null;
+        let currentImageFile = null;
         let worker = null;
 
         // Initialize Tesseract worker
         async function initWorker() {
+            // If worker exists but might be in bad state, recreate it
+            if (worker) {
+                try {
+                    // Test if worker is still valid by checking if it has the recognize method
+                    if (typeof worker.recognize !== 'function') {
+                        console.warn('Worker appears invalid, recreating...');
+                        await worker.terminate();
+                        worker = null;
+                    }
+                } catch (e) {
+                    console.warn('Worker check failed, recreating...', e);
+                    worker = null;
+                }
+            }
+            
             if (!worker) {
                 try {
                     progressText.textContent = 'Loading OCR engine...';
@@ -278,8 +294,13 @@
                             }
                         }
                     });
+                    // Ensure worker is fully ready
+                    if (!worker || typeof worker.recognize !== 'function') {
+                        throw new Error('Worker created but recognize method not available');
+                    }
                 } catch (error) {
                     console.error('Worker initialization error:', error);
+                    worker = null; // Reset worker on error
                     throw new Error('Failed to initialize OCR engine: ' + (error?.message || error?.toString() || 'Unknown error'));
                 }
             }
@@ -306,6 +327,9 @@
                 return;
             }
             
+            // Store the file object for Tesseract
+            currentImageFile = file;
+            
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
@@ -330,7 +354,7 @@
 
         // Process image with OCR
         async function processImage() {
-            if (!currentImage) return;
+            if (!currentImageFile && !currentImage) return;
 
             progressSection.classList.add('show');
             resultsSection.style.display = 'none';
@@ -339,14 +363,20 @@
             progressText.textContent = 'Initializing OCR...';
 
             try {
+                // Initialize worker first
                 await initWorker();
-                progressText.textContent = 'Processing image...';
-
+                
                 if (!worker) {
                     throw new Error('OCR worker not initialized');
                 }
                 
-                const result = await worker.recognize(currentImage);
+                progressText.textContent = 'Processing image...';
+
+                // Use the file object if available, otherwise use the data URL
+                // Tesseract works better with File objects
+                const imageSource = currentImageFile || currentImage;
+                
+                const result = await worker.recognize(imageSource);
                 if (!result || !result.data) {
                     throw new Error('OCR recognition returned no data');
                 }
@@ -450,6 +480,7 @@
         // Clear button
         clearBtn.addEventListener('click', () => {
             currentImage = null;
+            currentImageFile = null;
             previewImage.src = '';
             previewImage.classList.remove('show');
             progressSection.classList.remove('show');
