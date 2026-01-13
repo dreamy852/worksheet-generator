@@ -13,7 +13,6 @@
     <script>
         const statusDiv = document.getElementById('status');
         const outputDiv = document.getElementById('output');
-        let worker = null;
 
         document.addEventListener('paste', async (e) => {
             const items = e.clipboardData.items;
@@ -31,29 +30,22 @@
             statusDiv.textContent = 'Processing...';
             outputDiv.textContent = '';
 
+            const worker = Tesseract.createWorker();
+            
             try {
-                // Terminate existing worker if any
-                if (worker) {
-                    await worker.terminate();
-                    worker = null;
-                }
-
-                // Create new worker for each recognition to avoid state issues
-                worker = await Tesseract.createWorker('chi_tra+chi_sim+eng');
+                await worker.load();
+                await worker.loadLanguage('chi_tra+chi_sim+eng');
+                await worker.initialize('chi_tra+chi_sim+eng');
                 
                 const { data: { text } } = await worker.recognize(file);
+                
                 outputDiv.textContent = text;
                 statusDiv.textContent = 'Done';
             } catch (error) {
                 statusDiv.textContent = 'Error: ' + (error.message || error);
                 outputDiv.textContent = '';
-                // Reset worker on error
-                if (worker) {
-                    try {
-                        await worker.terminate();
-                    } catch (e) {}
-                    worker = null;
-                }
+            } finally {
+                await worker.terminate();
             }
         }
     </script>
