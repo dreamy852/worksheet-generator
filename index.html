@@ -60,18 +60,6 @@
             text-align: center;
             background: #f8f9ff;
             transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .upload-area:hover {
-            border-color: #764ba2;
-            background: #f0f2ff;
-        }
-
-        .upload-area.dragover {
-            border-color: #764ba2;
-            background: #e8ebff;
-            transform: scale(1.02);
         }
 
         .upload-icon {
@@ -88,10 +76,6 @@
         .upload-hint {
             color: #888;
             font-size: 0.9em;
-        }
-
-        #fileInput {
-            display: none;
         }
 
         .preview-section {
@@ -126,21 +110,6 @@
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: 600;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
         }
 
         .btn-secondary {
@@ -218,11 +187,10 @@
             overflow-y: auto;
         }
 
-        .latex-content {
+        .result-content .latex {
             background: #fff9e6;
-            border-left: 4px solid #ffa500;
-            padding: 10px;
-            margin: 10px 0;
+            padding: 2px 4px;
+            border-radius: 3px;
             font-family: 'Courier New', monospace;
         }
 
@@ -243,23 +211,21 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📸 OCR LaTeX Extractor</h1>
-            <p>Extract LaTeX formulas ($$) from images</p>
+            <h1>📸 OCR Text & LaTeX Extractor</h1>
+            <p>Paste an image (Ctrl+V) to extract text and equations</p>
             <p style="font-size: 0.9em; margin-top: 5px;">Supports: Traditional Chinese, Simplified Chinese, English</p>
         </div>
 
         <div class="content">
             <div class="upload-section">
                 <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📁</div>
-                    <div class="upload-text">Click to upload or paste an image</div>
-                    <div class="upload-hint">Supports: PNG, JPG, JPEG, GIF, WEBP</div>
-                    <input type="file" id="fileInput" accept="image/*">
+                    <div class="upload-icon">📋</div>
+                    <div class="upload-text">Press Ctrl+V to paste an image</div>
+                    <div class="upload-hint">Processing starts automatically</div>
                 </div>
                 <img id="previewImage" class="preview-image" alt="Preview">
                 
                 <div class="button-group">
-                    <button class="btn-primary" id="processBtn" disabled>Extract LaTeX</button>
                     <button class="btn-secondary" id="clearBtn">Clear</button>
                 </div>
             </div>
@@ -273,12 +239,8 @@
 
             <div class="results-section" id="resultsSection" style="display: none;">
                 <div class="result-box">
-                    <div class="result-title">📝 Full OCR Text:</div>
-                    <div class="result-content" id="fullText"></div>
-                </div>
-                <div class="result-box">
-                    <div class="result-title">🔢 LaTeX Formulas ($$):</div>
-                    <div class="result-content" id="latexText"></div>
+                    <div class="result-title">📝 Extracted Text with LaTeX:</div>
+                    <div class="result-content" id="outputText"></div>
                 </div>
             </div>
         </div>
@@ -286,16 +248,13 @@
 
     <script>
         const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
         const previewImage = document.getElementById('previewImage');
-        const processBtn = document.getElementById('processBtn');
         const clearBtn = document.getElementById('clearBtn');
         const progressSection = document.getElementById('progressSection');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
         const resultsSection = document.getElementById('resultsSection');
-        const fullTextDiv = document.getElementById('fullText');
-        const latexTextDiv = document.getElementById('latexText');
+        const outputTextDiv = document.getElementById('outputText');
 
         let currentImage = null;
         let worker = null;
@@ -317,65 +276,38 @@
             return worker;
         }
 
-        // Handle file selection
-        uploadArea.addEventListener('click', () => fileInput.click());
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleImageFile(file);
-            }
-        });
-
-        // Handle drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleImageFile(file);
-            }
-        });
-
         // Handle paste
-        document.addEventListener('paste', (e) => {
+        document.addEventListener('paste', async (e) => {
             const items = e.clipboardData.items;
             for (let item of items) {
                 if (item.type.startsWith('image/')) {
+                    e.preventDefault();
                     const file = item.getAsFile();
-                    handleImageFile(file);
+                    await handleImageFile(file);
                     break;
                 }
             }
         });
 
-        // Handle image file
-        function handleImageFile(file) {
+        // Handle image file and process automatically
+        async function handleImageFile(file) {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 currentImage = e.target.result;
                 previewImage.src = currentImage;
                 previewImage.classList.add('show');
-                processBtn.disabled = false;
                 resultsSection.style.display = 'none';
+                
+                // Automatically process the image
+                await processImage();
             };
             reader.readAsDataURL(file);
         }
 
         // Process image with OCR
-        processBtn.addEventListener('click', async () => {
+        async function processImage() {
             if (!currentImage) return;
 
-            processBtn.disabled = true;
             progressSection.classList.add('show');
             resultsSection.style.display = 'none';
             progressFill.style.width = '0%';
@@ -388,44 +320,91 @@
 
                 const { data: { text } } = await worker.recognize(currentImage);
                 
-                // Display full text
-                fullTextDiv.textContent = text || '(No text detected)';
-
-                // Extract LaTeX formulas (between $$)
-                const latexMatches = extractLatexFormulas(text);
-                
-                if (latexMatches.length > 0) {
-                    latexTextDiv.innerHTML = latexMatches.map(formula => 
-                        `<div class="latex-content">$$${formula}$$</div>`
-                    ).join('\n');
-                } else {
-                    latexTextDiv.textContent = '(No LaTeX formulas found)';
-                }
+                // Format text with inline LaTeX
+                const formattedText = formatTextWithLatex(text);
+                outputTextDiv.innerHTML = formattedText || '(No text detected)';
 
                 resultsSection.style.display = 'block';
                 progressSection.classList.remove('show');
-                processBtn.disabled = false;
 
             } catch (error) {
                 console.error('OCR Error:', error);
                 progressText.textContent = 'Error: ' + error.message;
                 resultsSection.innerHTML = `<div class="error-message">Error processing image: ${error.message}</div>`;
                 resultsSection.style.display = 'block';
-                processBtn.disabled = false;
             }
-        });
+        }
 
-        // Extract LaTeX formulas between $$
-        function extractLatexFormulas(text) {
-            const latexPattern = /\$\$([^$]+)\$\$/g;
-            const matches = [];
-            let match;
+        // Format text with inline LaTeX equations
+        function formatTextWithLatex(text) {
+            if (!text) return '';
             
-            while ((match = latexPattern.exec(text)) !== null) {
-                matches.push(match[1].trim());
+            // Split text into words/tokens while preserving spaces
+            // This regex splits on whitespace but keeps the whitespace
+            const tokens = text.split(/(\s+)/);
+            const result = [];
+            
+            for (let token of tokens) {
+                if (isWhitespace(token)) {
+                    result.push(token);
+                } else if (isMathematicalExpression(token)) {
+                    // Wrap mathematical expressions in $...$
+                    result.push(`<span class="latex">$${escapeHtml(token)}$</span>`);
+                } else {
+                    result.push(escapeHtml(token));
+                }
             }
             
-            return matches;
+            return result.join('');
+        }
+
+        // Check if a token is a mathematical expression
+        function isMathematicalExpression(token) {
+            if (!token || token.trim().length === 0) return false;
+            
+            // Mathematical operators
+            const mathOperators = /[+\-×÷=<>≤≥≠±∞∑∏∫√∂∇∆]/;
+            
+            // Contains superscript/subscript patterns (x^2, x_2, etc.)
+            const superscriptPattern = /[a-zA-Z]\^[0-9a-zA-Z]/;
+            const subscriptPattern = /[a-zA-Z]_[0-9a-zA-Z]/;
+            
+            // Contains numbers with operators (3x, 2x^2, etc.)
+            const numberWithVar = /[0-9]+[a-zA-Z](\^[0-9a-zA-Z])?/;
+            
+            // Contains fractions (a/b, etc.)
+            const fractionPattern = /[0-9a-zA-Z]\/[0-9a-zA-Z]/;
+            
+            // Contains Greek letters (common in math)
+            const greekLetters = /[αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ]/;
+            
+            // Contains parentheses with math content
+            const parenMath = /\([^)]*[+\-×÷=<>≤≥0-9a-zA-Z^_][^)]*\)/;
+            
+            // Check various mathematical patterns
+            return mathOperators.test(token) ||
+                   superscriptPattern.test(token) ||
+                   subscriptPattern.test(token) ||
+                   numberWithVar.test(token) ||
+                   fractionPattern.test(token) ||
+                   greekLetters.test(token) ||
+                   parenMath.test(token) ||
+                   // Pattern like "3x^2" or "x^2" or "2x"
+                   /^[0-9]*[a-zA-Z](\^[0-9a-zA-Z]+)?(_[0-9a-zA-Z]+)?$/.test(token) ||
+                   // Pattern with operators and numbers
+                   /^[0-9]+[+\-×÷=<>≤≥][0-9]+$/.test(token);
+        }
+
+        // Check if token is whitespace
+        function isWhitespace(token) {
+            return /^\s+$/.test(token);
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Clear button
@@ -433,12 +412,9 @@
             currentImage = null;
             previewImage.src = '';
             previewImage.classList.remove('show');
-            fileInput.value = '';
-            processBtn.disabled = true;
             progressSection.classList.remove('show');
             resultsSection.style.display = 'none';
-            fullTextDiv.textContent = '';
-            latexTextDiv.textContent = '';
+            outputTextDiv.textContent = '';
         });
 
         // Cleanup worker on page unload
