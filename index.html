@@ -38,6 +38,16 @@
             color: #333;
             margin-bottom: 20px;
         }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
         textarea {
             width: 100%;
             min-height: 200px;
@@ -148,7 +158,9 @@
             .container > h1,
             .container > label,
             .container > p,
+            .container > input,
             .container > textarea,
+            #solutionArea,
             .container > button,
             .image-paste-area,
             #status {
@@ -184,12 +196,24 @@
             <p>📷 Paste image here (Ctrl+V)</p>
             <img id="pastedImage" style="display: none;" alt="Pasted image">
         </div>
+        <label for="topicInput">Topic (optional):</label>
+        <input type="text" id="topicInput" placeholder="Leave empty for AI to generate topic">
+        <p style="margin: -5px 0 10px 0; color: #666; font-size: 12px;">
+            💡 If nothing is written, AI will generate a topic automatically. Otherwise, your topic will be used.
+        </p>
         <textarea id="contentInput" placeholder="Paste your content here..."></textarea>
         <button id="submitBtn" onclick="processContent()">Submit</button>
-        <div id="status"></div>
-        <div id="output"></div>
+    <div id="status"></div>
+    <div id="output"></div>
         <button id="printBtn" class="print-btn" onclick="printWorksheet()" style="display: none;">Print Worksheet</button>
-        <button id="generateAnswerBtn" class="print-btn" onclick="generateAnswers()" style="display: none; background-color: #ffc107; margin-top: 20px;">Generate Answer</button>
+        <div id="solutionArea" style="display: none; margin-top: 20px;">
+            <label for="solutionInput">Solution (optional):</label>
+            <textarea id="solutionInput" placeholder="Enter solutions here. If left empty, AI will generate answers automatically." style="width: 100%; min-height: 150px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-family: Arial, sans-serif; resize: vertical; box-sizing: border-box; margin-top: 5px;"></textarea>
+            <p style="margin: 5px 0 10px 0; color: #666; font-size: 12px;">
+                💡 If nothing is written, the system will generate answers using AI. Otherwise, answers will be extracted from your solutions.
+            </p>
+            <button id="extractAnswerBtn" class="print-btn" onclick="extractOrGenerateAnswers()" style="background-color: #ffc107;">Extract Answer</button>
+        </div>
         <div id="answerOutput" style="margin-top: 30px;"></div>
         <button id="printAnswerBtn" class="print-btn" onclick="printAnswerSheet()" style="display: none;">Print Answer Sheet</button>
     </div>
@@ -312,8 +336,8 @@ Return only the topic, no explanation:`;
         async function processContent() {
             const contentInput = document.getElementById('contentInput');
             const submitBtn = document.getElementById('submitBtn');
-            const statusDiv = document.getElementById('status');
-            const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
 
             const content = contentInput.value.trim();
             if (!content) {
@@ -326,8 +350,9 @@ Return only the topic, no explanation:`;
             outputDiv.innerHTML = '';
             document.getElementById('answerOutput').innerHTML = '';
             document.getElementById('printBtn').style.display = 'none';
-            document.getElementById('generateAnswerBtn').style.display = 'none';
+            document.getElementById('solutionArea').style.display = 'none';
             document.getElementById('printAnswerBtn').style.display = 'none';
+            document.getElementById('solutionInput').value = '';
             storedTranslatedQuestions = null;
             storedTopic = null;
             // Note: storedPastedImage is preserved so user can reuse it
@@ -352,9 +377,39 @@ Return only the topic, no explanation:`;
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
 
-                // Step 3: Generate topic
-                statusDiv.textContent = 'Generating topic...';
-                const topic = await generateTopic(questions);
+                // Step 3: Get or generate topic
+                const topicInput = document.getElementById('topicInput').value.trim();
+                let topic;
+                
+                if (topicInput) {
+                    // User provided topic - translate it to both languages
+                    statusDiv.textContent = 'Translating topic...';
+                    const hasChinese = /[\u4e00-\u9fff]/.test(topicInput);
+                    
+                    if (hasChinese) {
+                        // Topic is in Chinese, translate to English
+                        const prompt = `Translate the following topic/title from Traditional Chinese to English. Return only the translation, no explanation:
+
+${topicInput}`;
+                        const topicEn = await callDeepSeekAPI([
+                            { role: 'user', content: prompt }
+                        ]);
+                        topic = { english: topicEn.trim(), chinese: topicInput };
+                    } else {
+                        // Topic is in English, translate to Chinese
+                        const prompt = `Translate the following topic/title from English to Traditional Chinese (繁體中文). Return only the translation, no explanation:
+
+${topicInput}`;
+                        const topicZh = await callDeepSeekAPI([
+                            { role: 'user', content: prompt }
+                        ]);
+                        topic = { english: topicInput, chinese: topicZh.trim() };
+                    }
+                } else {
+                    // No topic provided - generate one
+                    statusDiv.textContent = 'Generating topic...';
+                    topic = await generateTopic(questions);
+                }
 
                 // Store for later answer generation
                 storedTranslatedQuestions = translatedQuestions;
@@ -366,21 +421,21 @@ Return only the topic, no explanation:`;
                 
                 outputDiv.innerHTML = worksheetHTML;
                 
-                // Show print button and generate answer button
+                // Show print button and solution area
                 document.getElementById('printBtn').style.display = 'block';
-                document.getElementById('generateAnswerBtn').style.display = 'block';
+                document.getElementById('solutionArea').style.display = 'block';
                 document.getElementById('printAnswerBtn').style.display = 'none';
                 
                 // Re-render MathJax after inserting HTML
                 if (window.MathJax) {
                     MathJax.typesetPromise([outputDiv]).then(() => {
-                        statusDiv.textContent = 'Question paper ready! Click "Generate Answer" to create the answer sheet.';
+                        statusDiv.textContent = 'Question paper ready! Enter solutions (optional) and click "Extract Answer" to create the answer sheet.';
                     }).catch((err) => {
                         console.error('MathJax rendering error:', err);
                         statusDiv.textContent = 'Question paper ready! (with rendering warnings)';
                     });
                 } else {
-                    statusDiv.textContent = 'Question paper ready! Click "Generate Answer" to create the answer sheet.';
+                    statusDiv.textContent = 'Question paper ready! Enter solutions (optional) and click "Extract Answer" to create the answer sheet.';
                 }
             } catch (error) {
                 statusDiv.textContent = `Error: ${error.message}`;
@@ -490,43 +545,91 @@ Return only the topic, no explanation:`;
             return html;
         }
 
-        async function generateAnswers() {
+        async function extractAnswerFromSolution(question, solution) {
+            const prompt = `Given the following question and solution, extract ONLY the direct answer (not the solution steps, just the final answer):
+
+Question: ${question}
+Solution: ${solution}
+
+Return only the answer:`;
+            
+            const answer = await callDeepSeekAPI([
+                { role: 'user', content: prompt }
+            ]);
+            
+            return answer.trim();
+        }
+
+        async function extractOrGenerateAnswers() {
             if (!storedTranslatedQuestions || !storedTopic) {
                 alert('Please generate the question paper first!');
                 return;
             }
 
-            const generateAnswerBtn = document.getElementById('generateAnswerBtn');
+            const extractAnswerBtn = document.getElementById('extractAnswerBtn');
             const statusDiv = document.getElementById('status');
             const answerOutputDiv = document.getElementById('answerOutput');
+            const solutionInput = document.getElementById('solutionInput');
+            const solutionText = solutionInput.value.trim();
             
-            generateAnswerBtn.disabled = true;
-            statusDiv.textContent = `Generating answers for ${storedTranslatedQuestions.length} questions...`;
+            extractAnswerBtn.disabled = true;
             answerOutputDiv.innerHTML = '';
 
             try {
                 const translatedQuestionsWithAnswers = [];
-                for (let i = 0; i < storedTranslatedQuestions.length; i++) {
-                    statusDiv.textContent = `Generating answer for question ${i + 1} of ${storedTranslatedQuestions.length}...`;
-                    const englishQuestion = storedTranslatedQuestions[i].originalLang === 'English' 
-                        ? storedTranslatedQuestions[i].original 
-                        : storedTranslatedQuestions[i].translated;
-                    const chineseQuestion = storedTranslatedQuestions[i].originalLang === '繁體中文' 
-                        ? storedTranslatedQuestions[i].original 
-                        : storedTranslatedQuestions[i].translated;
+                
+                if (solutionText) {
+                    // Extract answers from solutions
+                    statusDiv.textContent = `Extracting answers from solutions for ${storedTranslatedQuestions.length} questions...`;
                     
-                    const [englishAnswer, chineseAnswer] = await Promise.all([
-                        generateAnswer(englishQuestion),
-                        generateAnswer(chineseQuestion)
-                    ]);
+                    for (let i = 0; i < storedTranslatedQuestions.length; i++) {
+                        statusDiv.textContent = `Extracting answer for question ${i + 1} of ${storedTranslatedQuestions.length}...`;
+                        const englishQuestion = storedTranslatedQuestions[i].originalLang === 'English' 
+                            ? storedTranslatedQuestions[i].original 
+                            : storedTranslatedQuestions[i].translated;
+                        const chineseQuestion = storedTranslatedQuestions[i].originalLang === '繁體中文' 
+                            ? storedTranslatedQuestions[i].original 
+                            : storedTranslatedQuestions[i].translated;
+                        
+                        const [englishAnswer, chineseAnswer] = await Promise.all([
+                            extractAnswerFromSolution(englishQuestion, solutionText),
+                            extractAnswerFromSolution(chineseQuestion, solutionText)
+                        ]);
+                        
+                        translatedQuestionsWithAnswers.push({
+                            ...storedTranslatedQuestions[i],
+                            englishAnswer: englishAnswer,
+                            chineseAnswer: chineseAnswer
+                        });
+                        // Small delay to avoid rate limiting
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } else {
+                    // Generate answers using AI
+                    statusDiv.textContent = `Generating answers for ${storedTranslatedQuestions.length} questions...`;
                     
-                    translatedQuestionsWithAnswers.push({
-                        ...storedTranslatedQuestions[i],
-                        englishAnswer: englishAnswer,
-                        chineseAnswer: chineseAnswer
-                    });
-                    // Small delay to avoid rate limiting
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    for (let i = 0; i < storedTranslatedQuestions.length; i++) {
+                        statusDiv.textContent = `Generating answer for question ${i + 1} of ${storedTranslatedQuestions.length}...`;
+                        const englishQuestion = storedTranslatedQuestions[i].originalLang === 'English' 
+                            ? storedTranslatedQuestions[i].original 
+                            : storedTranslatedQuestions[i].translated;
+                        const chineseQuestion = storedTranslatedQuestions[i].originalLang === '繁體中文' 
+                            ? storedTranslatedQuestions[i].original 
+                            : storedTranslatedQuestions[i].translated;
+                        
+                        const [englishAnswer, chineseAnswer] = await Promise.all([
+                            generateAnswer(englishQuestion),
+                            generateAnswer(chineseQuestion)
+                        ]);
+                        
+                        translatedQuestionsWithAnswers.push({
+                            ...storedTranslatedQuestions[i],
+                            englishAnswer: englishAnswer,
+                            chineseAnswer: chineseAnswer
+                        });
+                        // Small delay to avoid rate limiting
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
                 }
 
                 // Generate answer sheet HTML
@@ -552,7 +655,7 @@ Return only the topic, no explanation:`;
                 answerOutputDiv.innerHTML = '';
                 console.error(error);
             } finally {
-                generateAnswerBtn.disabled = false;
+                extractAnswerBtn.disabled = false;
             }
         }
 
