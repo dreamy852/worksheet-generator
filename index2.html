@@ -79,9 +79,20 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        .worksheet img {
+        .worksheet > img {
             max-width: 200px;
             margin-bottom: 20px;
+        }
+        .worksheet .pasted-image-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .worksheet .pasted-image-container img {
+            max-width: 100%;
+            max-height: none;
+            width: auto;
+            height: auto;
+            border-radius: 4px;
         }
         .worksheet h2 {
             margin-top: 30px;
@@ -108,7 +119,6 @@
             background-color: #f9f9f9;
             margin-bottom: 15px;
             min-height: 100px;
-            cursor: pointer;
         }
         .image-paste-area:hover {
             border-color: #007bff;
@@ -141,7 +151,6 @@
             .container > textarea,
             .container > button,
             .image-paste-area,
-            #imageInput,
             #status {
                 display: none !important;
             }
@@ -171,11 +180,10 @@
         <p style="margin: 5px 0 10px 0; color: #666; font-size: 14px;">
             💡 Tip: You can download the answer sheet if necessary: <a href="AnswerSheet.pdf" style="color: #007bff;">AnswerSheet.pdf</a>.
         </p>
-        <div class="image-paste-area" id="imagePasteArea" onclick="document.getElementById('imageInput').click()">
-            <p>📷 Paste image here (Ctrl+V) or click to select</p>
+        <div class="image-paste-area" id="imagePasteArea">
+            <p>📷 Paste image here (Ctrl+V)</p>
             <img id="pastedImage" style="display: none;" alt="Pasted image">
         </div>
-        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
         <textarea id="contentInput" placeholder="Paste your content here..."></textarea>
         <button id="submitBtn" onclick="processContent()">Submit</button>
         <div id="status"></div>
@@ -597,13 +605,6 @@ Return only the topic, no explanation:`;
                 }
             }
         });
-
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleImageFile(file);
-            }
-        }
 
         function handleImageFile(file) {
             const reader = new FileReader();
