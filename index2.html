@@ -167,7 +167,7 @@
             💡 Tip: You can access <a href="https://gemini.google.com" target="_blank" style="color: #007bff;">gemini.google.com</a> to generate questions, then paste them here.
         </p>
         <p style="margin: 5px 0 10px 0; color: #666; font-size: 14px;">
-            💡 Tip: You can download the answer sheet if necessary by clicking <a href="AnswerSheet.pdf" download="AnswerSheet.pdf" style="color: #007bff;">"AnswerSheet.pdf"</a>.
+            💡 Tip: You can download the answer sheet if necessary: <a href="AnswerSheet.pdf" style="color: #007bff;">AnswerSheet.pdf</a>.
         </p>
         <div class="image-paste-area" id="imagePasteArea" onclick="document.getElementById('imageInput').click()">
             <p>📷 Paste image here (Ctrl+V) or click to select</p>
@@ -394,11 +394,11 @@ Return only the topic, no explanation:`;
                     <hr>
             `;
             
-            // Add pasted image if available
+            // Add pasted image if available (after header, before questions)
             if (storedPastedImage) {
                 html += `
-                    <div style="margin: 20px 0; text-align: center;">
-                        <img src="${storedPastedImage}" alt="Pasted image" style="max-width: 100%; max-height: 500px; border-radius: 4px;">
+                    <div class="pasted-image-container">
+                        <img src="${storedPastedImage}" alt="Pasted image">
                     </div>
                 `;
             }
@@ -417,6 +417,9 @@ Return only the topic, no explanation:`;
 
             html += `
                     </ol>
+            `;
+            
+            html += `
                 </div>
             `;
 
@@ -436,11 +439,11 @@ Return only the topic, no explanation:`;
                     <hr>
             `;
             
-            // Add pasted image if available
+            // Add pasted image if available (after header, before questions)
             if (storedPastedImage) {
                 html += `
-                    <div style="margin: 20px 0; text-align: center;">
-                        <img src="${storedPastedImage}" alt="Pasted image" style="max-width: 100%; max-height: 500px; border-radius: 4px;">
+                    <div class="pasted-image-container">
+                        <img src="${storedPastedImage}" alt="Pasted image">
                     </div>
                 `;
             }
@@ -468,6 +471,9 @@ Return only the topic, no explanation:`;
 
             html += `
                     </ol>
+            `;
+            
+            html += `
                 </div>
             `;
 
